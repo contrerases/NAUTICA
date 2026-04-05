@@ -1,0 +1,1370 @@
+<template>
+  <div class="flex flex-col space-y-6 h-full">
+    <!-- Encabezado -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div>
+        <h2 class="text-3xl font-extrabold text-text-base">Gestión de Trabajadores</h2>
+        <p class="text-text-muted mt-1">Administra el personal, sus identidades y el valor de hora.</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <BaseButton @click="openCreateModal" variant="primary">
+          <template #icon>
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+    <!-- Modal de Adelantos -->
+    <BaseModal
+      v-model:is-open="isAdvModalOpen"
+      :title="`Adelantos - ${selectedWorkerForAdv?.name}`"
+      size="md"
+      @close="closeAdvances"
+    >
+      <div class="space-y-4">
+        <form @submit.prevent="submitAdvance" class="space-y-3 bg-surface-muted/50 p-4 rounded-xl border border-surface-border">
+          <h4 class="text-sm font-bold text-text-base uppercase tracking-wider">Registrar Nuevo Adelanto</h4>
+          <div class="grid grid-cols-2 gap-3">
+            <BaseInput v-model="newAdv.date" type="date" required label="Fecha" />
+            <BaseInput v-model.number="newAdv.amount" type="number" required min="1" step="1000" label="Monto ($)" />
+          </div>
+          <BaseInput v-model="newAdv.notes" type="text" label="Observación (Opcional)" placeholder="Ej: Transporte, salud..." />
+          <BaseButton type="submit" variant="primary" class="w-full" :is-loading="advLoading">Agregar Adelanto</BaseButton>
+        </form>
+
+        <div class="mt-4 pt-4 border-t border-surface-border/50">
+          <h4 class="text-sm font-bold text-text-base mb-3 flex items-center justify-between">
+            <span>Historial (Mes Actual)</span>
+            <span class="text-xs font-normal text-text-muted">Total: ${{ totalAdvancesMoth.toLocaleString("es-CL") }}</span>
+          </h4>
+          <div v-if="advLoadingList" class="text-center py-4 text-text-muted text-sm animate-pulse">Cargando historial...</div>
+          <div v-else-if="advances.length === 0" class="text-center py-4 text-text-muted text-sm italic">Sin adelantos este mes.</div>
+          <ul v-else class="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
+            <li v-for="adv in advances" :key="adv.id" class="flex justify-between items-center bg-surface-base border border-surface-border p-3 rounded-lg shadow-sm">
+              <div>
+                <strong class="text-emerald-500 font-mono">${{ adv.amount.toLocaleString("es-CL") }}</strong>
+                <p class="text-xs text-text-muted mt-0.5">{{ formatDate(adv.date) }} <span v-if="adv.notes" class="italic">- {{ adv.notes }}</span></p>
+              </div>
+              <button @click="deleteAdvance(adv.id)" class="text-danger hover:bg-danger/10 p-2 rounded-lg transition-colors border-none" title="Eliminar este adelanto">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <template #footer>
+        <BaseButton variant="secondary" class="w-full" @click="closeAdvances">Cerrar</BaseButton>
+      </template>
+    </BaseModal>
+
+          </template>
+          Nuevo Trabajador
+        </BaseButton>
+      </div>
+    </div>
+
+    <!-- Barra de Filtros Avanzados -->
+    <BaseCard padding="base" class="bg-surface-muted border-none w-full">
+      <div class="flex flex-row flex-wrap lg:flex-nowrap items-end gap-4 w-full">
+        <BaseInput
+          v-model="searchQuery"
+          id="search-worker"
+          label="Buscar Trabajador"
+          placeholder="Buscar por nombre o doc..."
+          class="flex-1 min-w-[200px]"
+        >
+          <template #icon>
+            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+    <!-- Modal de Adelantos -->
+    <BaseModal
+      v-model:is-open="isAdvModalOpen"
+      :title="`Adelantos - ${selectedWorkerForAdv?.name}`"
+      size="md"
+      @close="closeAdvances"
+    >
+      <div class="space-y-4">
+        <form @submit.prevent="submitAdvance" class="space-y-3 bg-surface-muted/50 p-4 rounded-xl border border-surface-border">
+          <h4 class="text-sm font-bold text-text-base uppercase tracking-wider">Registrar Nuevo Adelanto</h4>
+          <div class="grid grid-cols-2 gap-3">
+            <BaseInput v-model="newAdv.date" type="date" required label="Fecha" />
+            <BaseInput v-model.number="newAdv.amount" type="number" required min="1" step="1000" label="Monto ($)" />
+          </div>
+          <BaseInput v-model="newAdv.notes" type="text" label="Observación (Opcional)" placeholder="Ej: Transporte, salud..." />
+          <BaseButton type="submit" variant="primary" class="w-full" :is-loading="advLoading">Agregar Adelanto</BaseButton>
+        </form>
+
+        <div class="mt-4 pt-4 border-t border-surface-border/50">
+          <h4 class="text-sm font-bold text-text-base mb-3 flex items-center justify-between">
+            <span>Historial (Mes Actual)</span>
+            <span class="text-xs font-normal text-text-muted">Total: ${{ totalAdvancesMoth.toLocaleString("es-CL") }}</span>
+          </h4>
+          <div v-if="advLoadingList" class="text-center py-4 text-text-muted text-sm animate-pulse">Cargando historial...</div>
+          <div v-else-if="advances.length === 0" class="text-center py-4 text-text-muted text-sm italic">Sin adelantos este mes.</div>
+          <ul v-else class="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
+            <li v-for="adv in advances" :key="adv.id" class="flex justify-between items-center bg-surface-base border border-surface-border p-3 rounded-lg shadow-sm">
+              <div>
+                <strong class="text-emerald-500 font-mono">${{ adv.amount.toLocaleString("es-CL") }}</strong>
+                <p class="text-xs text-text-muted mt-0.5">{{ formatDate(adv.date) }} <span v-if="adv.notes" class="italic">- {{ adv.notes }}</span></p>
+              </div>
+              <button @click="deleteAdvance(adv.id)" class="text-danger hover:bg-danger/10 p-2 rounded-lg transition-colors border-none" title="Eliminar este adelanto">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <template #footer>
+        <BaseButton variant="secondary" class="w-full" @click="closeAdvances">Cerrar</BaseButton>
+      </template>
+    </BaseModal>
+
+          </template>
+        </BaseInput>
+
+        <BaseInput
+          v-model="filterDateFrom"
+          id="filter-date-from"
+          type="date"
+          label="Ingreso Desde"
+          class="w-full sm:w-40 flex-shrink-0"
+        />
+
+        <BaseInput
+          v-model="filterDateTo"
+          id="filter-date-to"
+          type="date"
+          label="Ingreso Hasta"
+          class="w-full sm:w-40 flex-shrink-0"
+        />
+
+        <div class="w-full sm:w-auto min-w-[200px] flex-shrink-0 space-y-1">
+          <label class="block text-sm font-semibold text-text-base ml-1">Estado</label>
+          <select
+            v-model="statusFilter"
+            class="w-full h-[42px] block border border-surface-border rounded-lg bg-surface text-text-base text-sm shadow-sm transition-all outline-none px-4 focus:border-primary focus:ring-2 focus:ring-primary/20"
+          >
+            <option value="ALL">Todos los Estados</option>
+            <option value="ACTIVE">Activos</option>
+            <option value="INACTIVE">Inactivos</option>
+          </select>
+        </div>
+      </div>
+    </BaseCard>
+
+    <!-- Alertas Generales -->
+    <div class="flex flex-col gap-3 mb-4" v-if="errorGlobal || successGlobal">
+      <BaseAlert 
+        v-if="errorGlobal" 
+        type="error" 
+        :title="'Error'"
+        :message="errorGlobal"
+        dismissible
+      />
+      <BaseAlert 
+        v-if="successGlobal" 
+        type="success" 
+        :title="'Éxito'"
+        :message="successGlobal"
+        dismissible
+      />
+    </div>
+
+    <!-- Tabla -->
+    <BaseCard class="flex-1 overflow-hidden" padding="none">
+      <BaseTable
+        :columns="tableColumns"
+        :data="filteredWorkers"
+        :loading="loading"
+        class="h-full"
+      >
+        <!-- Col Nombre -->
+        <template #cell-name="{ row }">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 text-primary flex items-center justify-center font-bold overflow-hidden shrink-0">
+               <img v-if="row.photo" :src="row.photo" class="w-full h-full object-cover"/>
+               <span v-else>{{ row.name.charAt(0).toUpperCase() }}</span>
+            </div>
+            <div>
+              <div class="font-bold text-text-base">{{ row.name }}</div>
+              <div class="text-xs text-text-muted">Creado: {{ formatDate(row.created_at) }}</div>
+            </div>
+          </div>
+    <!-- Modal de Adelantos -->
+    <BaseModal
+      v-model:is-open="isAdvModalOpen"
+      :title="`Adelantos - ${selectedWorkerForAdv?.name}`"
+      size="md"
+      @close="closeAdvances"
+    >
+      <div class="space-y-4">
+        <form @submit.prevent="submitAdvance" class="space-y-3 bg-surface-muted/50 p-4 rounded-xl border border-surface-border">
+          <h4 class="text-sm font-bold text-text-base uppercase tracking-wider">Registrar Nuevo Adelanto</h4>
+          <div class="grid grid-cols-2 gap-3">
+            <BaseInput v-model="newAdv.date" type="date" required label="Fecha" />
+            <BaseInput v-model.number="newAdv.amount" type="number" required min="1" step="1000" label="Monto ($)" />
+          </div>
+          <BaseInput v-model="newAdv.notes" type="text" label="Observación (Opcional)" placeholder="Ej: Transporte, salud..." />
+          <BaseButton type="submit" variant="primary" class="w-full" :is-loading="advLoading">Agregar Adelanto</BaseButton>
+        </form>
+
+        <div class="mt-4 pt-4 border-t border-surface-border/50">
+          <h4 class="text-sm font-bold text-text-base mb-3 flex items-center justify-between">
+            <span>Historial (Mes Actual)</span>
+            <span class="text-xs font-normal text-text-muted">Total: ${{ totalAdvancesMoth.toLocaleString("es-CL") }}</span>
+          </h4>
+          <div v-if="advLoadingList" class="text-center py-4 text-text-muted text-sm animate-pulse">Cargando historial...</div>
+          <div v-else-if="advances.length === 0" class="text-center py-4 text-text-muted text-sm italic">Sin adelantos este mes.</div>
+          <ul v-else class="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
+            <li v-for="adv in advances" :key="adv.id" class="flex justify-between items-center bg-surface-base border border-surface-border p-3 rounded-lg shadow-sm">
+              <div>
+                <strong class="text-emerald-500 font-mono">${{ adv.amount.toLocaleString("es-CL") }}</strong>
+                <p class="text-xs text-text-muted mt-0.5">{{ formatDate(adv.date) }} <span v-if="adv.notes" class="italic">- {{ adv.notes }}</span></p>
+              </div>
+              <button @click="deleteAdvance(adv.id)" class="text-danger hover:bg-danger/10 p-2 rounded-lg transition-colors border-none" title="Eliminar este adelanto">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <template #footer>
+        <BaseButton variant="secondary" class="w-full" @click="closeAdvances">Cerrar</BaseButton>
+      </template>
+    </BaseModal>
+
+        </template>
+
+        <!-- Col Documento -->
+        <template #cell-document="{ row }">
+          <div class="flex items-center gap-2">
+            <span v-if="row.rut" class="font-mono text-sm">{{ row.rut }} <span class="text-text-muted text-xs">(RUT)</span></span>
+            <span v-else-if="row.dni" class="font-mono text-sm">{{ row.dni }} <span class="text-text-muted text-xs">(DNI)</span></span>
+            <span v-else class="text-text-muted italic text-sm">Sin Documento</span>
+          </div>
+    <!-- Modal de Adelantos -->
+    <BaseModal
+      v-model:is-open="isAdvModalOpen"
+      :title="`Adelantos - ${selectedWorkerForAdv?.name}`"
+      size="md"
+      @close="closeAdvances"
+    >
+      <div class="space-y-4">
+        <form @submit.prevent="submitAdvance" class="space-y-3 bg-surface-muted/50 p-4 rounded-xl border border-surface-border">
+          <h4 class="text-sm font-bold text-text-base uppercase tracking-wider">Registrar Nuevo Adelanto</h4>
+          <div class="grid grid-cols-2 gap-3">
+            <BaseInput v-model="newAdv.date" type="date" required label="Fecha" />
+            <BaseInput v-model.number="newAdv.amount" type="number" required min="1" step="1000" label="Monto ($)" />
+          </div>
+          <BaseInput v-model="newAdv.notes" type="text" label="Observación (Opcional)" placeholder="Ej: Transporte, salud..." />
+          <BaseButton type="submit" variant="primary" class="w-full" :is-loading="advLoading">Agregar Adelanto</BaseButton>
+        </form>
+
+        <div class="mt-4 pt-4 border-t border-surface-border/50">
+          <h4 class="text-sm font-bold text-text-base mb-3 flex items-center justify-between">
+            <span>Historial (Mes Actual)</span>
+            <span class="text-xs font-normal text-text-muted">Total: ${{ totalAdvancesMoth.toLocaleString("es-CL") }}</span>
+          </h4>
+          <div v-if="advLoadingList" class="text-center py-4 text-text-muted text-sm animate-pulse">Cargando historial...</div>
+          <div v-else-if="advances.length === 0" class="text-center py-4 text-text-muted text-sm italic">Sin adelantos este mes.</div>
+          <ul v-else class="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
+            <li v-for="adv in advances" :key="adv.id" class="flex justify-between items-center bg-surface-base border border-surface-border p-3 rounded-lg shadow-sm">
+              <div>
+                <strong class="text-emerald-500 font-mono">${{ adv.amount.toLocaleString("es-CL") }}</strong>
+                <p class="text-xs text-text-muted mt-0.5">{{ formatDate(adv.date) }} <span v-if="adv.notes" class="italic">- {{ adv.notes }}</span></p>
+              </div>
+              <button @click="deleteAdvance(adv.id)" class="text-danger hover:bg-danger/10 p-2 rounded-lg transition-colors border-none" title="Eliminar este adelanto">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <template #footer>
+        <BaseButton variant="secondary" class="w-full" @click="closeAdvances">Cerrar</BaseButton>
+      </template>
+    </BaseModal>
+
+        </template>
+
+        <!-- Col Valor Hora -->
+        <template #cell-hourly_rate="{ row }">
+          <span class="font-mono font-medium text-emerald-500">${{ row.hourly_rate.toLocaleString('es-CL') }}</span>
+    <!-- Modal de Adelantos -->
+    <BaseModal
+      v-model:is-open="isAdvModalOpen"
+      :title="`Adelantos - ${selectedWorkerForAdv?.name}`"
+      size="md"
+      @close="closeAdvances"
+    >
+      <div class="space-y-4">
+        <form @submit.prevent="submitAdvance" class="space-y-3 bg-surface-muted/50 p-4 rounded-xl border border-surface-border">
+          <h4 class="text-sm font-bold text-text-base uppercase tracking-wider">Registrar Nuevo Adelanto</h4>
+          <div class="grid grid-cols-2 gap-3">
+            <BaseInput v-model="newAdv.date" type="date" required label="Fecha" />
+            <BaseInput v-model.number="newAdv.amount" type="number" required min="1" step="1000" label="Monto ($)" />
+          </div>
+          <BaseInput v-model="newAdv.notes" type="text" label="Observación (Opcional)" placeholder="Ej: Transporte, salud..." />
+          <BaseButton type="submit" variant="primary" class="w-full" :is-loading="advLoading">Agregar Adelanto</BaseButton>
+        </form>
+
+        <div class="mt-4 pt-4 border-t border-surface-border/50">
+          <h4 class="text-sm font-bold text-text-base mb-3 flex items-center justify-between">
+            <span>Historial (Mes Actual)</span>
+            <span class="text-xs font-normal text-text-muted">Total: ${{ totalAdvancesMoth.toLocaleString("es-CL") }}</span>
+          </h4>
+          <div v-if="advLoadingList" class="text-center py-4 text-text-muted text-sm animate-pulse">Cargando historial...</div>
+          <div v-else-if="advances.length === 0" class="text-center py-4 text-text-muted text-sm italic">Sin adelantos este mes.</div>
+          <ul v-else class="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
+            <li v-for="adv in advances" :key="adv.id" class="flex justify-between items-center bg-surface-base border border-surface-border p-3 rounded-lg shadow-sm">
+              <div>
+                <strong class="text-emerald-500 font-mono">${{ adv.amount.toLocaleString("es-CL") }}</strong>
+                <p class="text-xs text-text-muted mt-0.5">{{ formatDate(adv.date) }} <span v-if="adv.notes" class="italic">- {{ adv.notes }}</span></p>
+              </div>
+              <button @click="deleteAdvance(adv.id)" class="text-danger hover:bg-danger/10 p-2 rounded-lg transition-colors border-none" title="Eliminar este adelanto">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <template #footer>
+        <BaseButton variant="secondary" class="w-full" @click="closeAdvances">Cerrar</BaseButton>
+      </template>
+    </BaseModal>
+
+        </template>
+
+        <!-- Col Valor Hora Extra -->
+        <template #cell-overtime="{ row }">
+          <div class="flex flex-col">
+            <span class="font-mono font-bold text-amber-500">${{ (row.hourly_rate * (configStore.config?.overtime_multiplier || 1.5)).toLocaleString('es-CL') }}</span>
+            <span class="text-[10px] text-text-muted mt-0.5">x{{ configStore.config?.overtime_multiplier || 1.5 }}</span>
+          </div>
+    <!-- Modal de Adelantos -->
+    <BaseModal
+      v-model:is-open="isAdvModalOpen"
+      :title="`Adelantos - ${selectedWorkerForAdv?.name}`"
+      size="md"
+      @close="closeAdvances"
+    >
+      <div class="space-y-4">
+        <form @submit.prevent="submitAdvance" class="space-y-3 bg-surface-muted/50 p-4 rounded-xl border border-surface-border">
+          <h4 class="text-sm font-bold text-text-base uppercase tracking-wider">Registrar Nuevo Adelanto</h4>
+          <div class="grid grid-cols-2 gap-3">
+            <BaseInput v-model="newAdv.date" type="date" required label="Fecha" />
+            <BaseInput v-model.number="newAdv.amount" type="number" required min="1" step="1000" label="Monto ($)" />
+          </div>
+          <BaseInput v-model="newAdv.notes" type="text" label="Observación (Opcional)" placeholder="Ej: Transporte, salud..." />
+          <BaseButton type="submit" variant="primary" class="w-full" :is-loading="advLoading">Agregar Adelanto</BaseButton>
+        </form>
+
+        <div class="mt-4 pt-4 border-t border-surface-border/50">
+          <h4 class="text-sm font-bold text-text-base mb-3 flex items-center justify-between">
+            <span>Historial (Mes Actual)</span>
+            <span class="text-xs font-normal text-text-muted">Total: ${{ totalAdvancesMoth.toLocaleString("es-CL") }}</span>
+          </h4>
+          <div v-if="advLoadingList" class="text-center py-4 text-text-muted text-sm animate-pulse">Cargando historial...</div>
+          <div v-else-if="advances.length === 0" class="text-center py-4 text-text-muted text-sm italic">Sin adelantos este mes.</div>
+          <ul v-else class="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
+            <li v-for="adv in advances" :key="adv.id" class="flex justify-between items-center bg-surface-base border border-surface-border p-3 rounded-lg shadow-sm">
+              <div>
+                <strong class="text-emerald-500 font-mono">${{ adv.amount.toLocaleString("es-CL") }}</strong>
+                <p class="text-xs text-text-muted mt-0.5">{{ formatDate(adv.date) }} <span v-if="adv.notes" class="italic">- {{ adv.notes }}</span></p>
+              </div>
+              <button @click="deleteAdvance(adv.id)" class="text-danger hover:bg-danger/10 p-2 rounded-lg transition-colors border-none" title="Eliminar este adelanto">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <template #footer>
+        <BaseButton variant="secondary" class="w-full" @click="closeAdvances">Cerrar</BaseButton>
+      </template>
+    </BaseModal>
+
+        </template>
+
+        <!-- Col Ingreso -->
+        <template #cell-start_date="{ row }">
+          {{ row.start_date || '-' }}
+    <!-- Modal de Adelantos -->
+    <BaseModal
+      v-model:is-open="isAdvModalOpen"
+      :title="`Adelantos - ${selectedWorkerForAdv?.name}`"
+      size="md"
+      @close="closeAdvances"
+    >
+      <div class="space-y-4">
+        <form @submit.prevent="submitAdvance" class="space-y-3 bg-surface-muted/50 p-4 rounded-xl border border-surface-border">
+          <h4 class="text-sm font-bold text-text-base uppercase tracking-wider">Registrar Nuevo Adelanto</h4>
+          <div class="grid grid-cols-2 gap-3">
+            <BaseInput v-model="newAdv.date" type="date" required label="Fecha" />
+            <BaseInput v-model.number="newAdv.amount" type="number" required min="1" step="1000" label="Monto ($)" />
+          </div>
+          <BaseInput v-model="newAdv.notes" type="text" label="Observación (Opcional)" placeholder="Ej: Transporte, salud..." />
+          <BaseButton type="submit" variant="primary" class="w-full" :is-loading="advLoading">Agregar Adelanto</BaseButton>
+        </form>
+
+        <div class="mt-4 pt-4 border-t border-surface-border/50">
+          <h4 class="text-sm font-bold text-text-base mb-3 flex items-center justify-between">
+            <span>Historial (Mes Actual)</span>
+            <span class="text-xs font-normal text-text-muted">Total: ${{ totalAdvancesMoth.toLocaleString("es-CL") }}</span>
+          </h4>
+          <div v-if="advLoadingList" class="text-center py-4 text-text-muted text-sm animate-pulse">Cargando historial...</div>
+          <div v-else-if="advances.length === 0" class="text-center py-4 text-text-muted text-sm italic">Sin adelantos este mes.</div>
+          <ul v-else class="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
+            <li v-for="adv in advances" :key="adv.id" class="flex justify-between items-center bg-surface-base border border-surface-border p-3 rounded-lg shadow-sm">
+              <div>
+                <strong class="text-emerald-500 font-mono">${{ adv.amount.toLocaleString("es-CL") }}</strong>
+                <p class="text-xs text-text-muted mt-0.5">{{ formatDate(adv.date) }} <span v-if="adv.notes" class="italic">- {{ adv.notes }}</span></p>
+              </div>
+              <button @click="deleteAdvance(adv.id)" class="text-danger hover:bg-danger/10 p-2 rounded-lg transition-colors border-none" title="Eliminar este adelanto">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <template #footer>
+        <BaseButton variant="secondary" class="w-full" @click="closeAdvances">Cerrar</BaseButton>
+      </template>
+    </BaseModal>
+
+        </template>
+
+        <!-- Col Estado -->
+        <template #cell-status="{ row }">
+          <BaseBadge :variant="row.status === 'ACTIVE' ? 'success' : 'danger'">
+            {{ row.status === 'ACTIVE' ? 'ACTIVO' : 'INACTIVO' }}
+          </BaseBadge>
+    <!-- Modal de Adelantos -->
+    <BaseModal
+      v-model:is-open="isAdvModalOpen"
+      :title="`Adelantos - ${selectedWorkerForAdv?.name}`"
+      size="md"
+      @close="closeAdvances"
+    >
+      <div class="space-y-4">
+        <form @submit.prevent="submitAdvance" class="space-y-3 bg-surface-muted/50 p-4 rounded-xl border border-surface-border">
+          <h4 class="text-sm font-bold text-text-base uppercase tracking-wider">Registrar Nuevo Adelanto</h4>
+          <div class="grid grid-cols-2 gap-3">
+            <BaseInput v-model="newAdv.date" type="date" required label="Fecha" />
+            <BaseInput v-model.number="newAdv.amount" type="number" required min="1" step="1000" label="Monto ($)" />
+          </div>
+          <BaseInput v-model="newAdv.notes" type="text" label="Observación (Opcional)" placeholder="Ej: Transporte, salud..." />
+          <BaseButton type="submit" variant="primary" class="w-full" :is-loading="advLoading">Agregar Adelanto</BaseButton>
+        </form>
+
+        <div class="mt-4 pt-4 border-t border-surface-border/50">
+          <h4 class="text-sm font-bold text-text-base mb-3 flex items-center justify-between">
+            <span>Historial (Mes Actual)</span>
+            <span class="text-xs font-normal text-text-muted">Total: ${{ totalAdvancesMoth.toLocaleString("es-CL") }}</span>
+          </h4>
+          <div v-if="advLoadingList" class="text-center py-4 text-text-muted text-sm animate-pulse">Cargando historial...</div>
+          <div v-else-if="advances.length === 0" class="text-center py-4 text-text-muted text-sm italic">Sin adelantos este mes.</div>
+          <ul v-else class="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
+            <li v-for="adv in advances" :key="adv.id" class="flex justify-between items-center bg-surface-base border border-surface-border p-3 rounded-lg shadow-sm">
+              <div>
+                <strong class="text-emerald-500 font-mono">${{ adv.amount.toLocaleString("es-CL") }}</strong>
+                <p class="text-xs text-text-muted mt-0.5">{{ formatDate(adv.date) }} <span v-if="adv.notes" class="italic">- {{ adv.notes }}</span></p>
+              </div>
+              <button @click="deleteAdvance(adv.id)" class="text-danger hover:bg-danger/10 p-2 rounded-lg transition-colors border-none" title="Eliminar este adelanto">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <template #footer>
+        <BaseButton variant="secondary" class="w-full" @click="closeAdvances">Cerrar</BaseButton>
+      </template>
+    </BaseModal>
+
+        </template>
+
+        <!-- Col Acciones -->
+        <template #cell-actions="{ row }">
+          <div class="flex items-center gap-2 justify-end">
+            <!-- Botón Adelantos -->
+            <button
+              @click="openAdvances(row)"
+              class="p-2 text-text-muted hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors border-none"
+              title="Gestionar Adelantos de Dinero"
+            >
+             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </button>
+
+            <!-- Botón Ver Detalles -->
+            <button 
+              @click="openDetailsModal(row)" 
+              class="p-2 text-text-muted hover:text-sky-500 hover:bg-sky-500/10 rounded-lg transition-colors border-none"
+              title="Resumen General"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+              </svg>
+            </button>
+
+            <!-- Botón Editar -->
+            <button 
+              @click="openEditModal(row)" 
+              class="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-colors border-none"
+              title="Editar"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+              </svg>
+            </button>
+
+            <!-- Botón Cambiar Estado (Soft Delete / Reactivate) -->
+            <button 
+              v-if="row.status === 'ACTIVE'"
+              @click="toggleStatus(row)" 
+              class="p-2 text-text-muted hover:text-warning hover:bg-warning/10 rounded-lg transition-colors border-none"
+              title="Desactivar Temporalmente"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
+              </svg>
+            </button>
+            <button 
+              v-else
+              @click="toggleStatus(row)" 
+              class="p-2 text-text-muted hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors border-none"
+              title="Activar"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+            </button>
+
+            <!-- Botón Eliminar Permanente (Hard Delete) -->
+            <button 
+              @click="promptHardDelete(row)" 
+              class="p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-lg transition-colors border-none"
+              title="Eliminar Permanentemente (Purgar)"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
+          </div>
+    <!-- Modal de Adelantos -->
+    <BaseModal
+      v-model:is-open="isAdvModalOpen"
+      :title="`Adelantos - ${selectedWorkerForAdv?.name}`"
+      size="md"
+      @close="closeAdvances"
+    >
+      <div class="space-y-4">
+        <form @submit.prevent="submitAdvance" class="space-y-3 bg-surface-muted/50 p-4 rounded-xl border border-surface-border">
+          <h4 class="text-sm font-bold text-text-base uppercase tracking-wider">Registrar Nuevo Adelanto</h4>
+          <div class="grid grid-cols-2 gap-3">
+            <BaseInput v-model="newAdv.date" type="date" required label="Fecha" />
+            <BaseInput v-model.number="newAdv.amount" type="number" required min="1" step="1000" label="Monto ($)" />
+          </div>
+          <BaseInput v-model="newAdv.notes" type="text" label="Observación (Opcional)" placeholder="Ej: Transporte, salud..." />
+          <BaseButton type="submit" variant="primary" class="w-full" :is-loading="advLoading">Agregar Adelanto</BaseButton>
+        </form>
+
+        <div class="mt-4 pt-4 border-t border-surface-border/50">
+          <h4 class="text-sm font-bold text-text-base mb-3 flex items-center justify-between">
+            <span>Historial (Mes Actual)</span>
+            <span class="text-xs font-normal text-text-muted">Total: ${{ totalAdvancesMoth.toLocaleString("es-CL") }}</span>
+          </h4>
+          <div v-if="advLoadingList" class="text-center py-4 text-text-muted text-sm animate-pulse">Cargando historial...</div>
+          <div v-else-if="advances.length === 0" class="text-center py-4 text-text-muted text-sm italic">Sin adelantos este mes.</div>
+          <ul v-else class="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
+            <li v-for="adv in advances" :key="adv.id" class="flex justify-between items-center bg-surface-base border border-surface-border p-3 rounded-lg shadow-sm">
+              <div>
+                <strong class="text-emerald-500 font-mono">${{ adv.amount.toLocaleString("es-CL") }}</strong>
+                <p class="text-xs text-text-muted mt-0.5">{{ formatDate(adv.date) }} <span v-if="adv.notes" class="italic">- {{ adv.notes }}</span></p>
+              </div>
+              <button @click="deleteAdvance(adv.id)" class="text-danger hover:bg-danger/10 p-2 rounded-lg transition-colors border-none" title="Eliminar este adelanto">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <template #footer>
+        <BaseButton variant="secondary" class="w-full" @click="closeAdvances">Cerrar</BaseButton>
+      </template>
+    </BaseModal>
+
+        </template>
+      </BaseTable>
+    </BaseCard>
+
+    <!-- Modal Formulario de Trabajador -->
+    <BaseModal 
+      :is-open="isModalOpen" 
+      @close="closeModal" 
+      :title="isEditing ? 'Editar Trabajador' : 'Nuevo Trabajador'"
+      max-width="lg"
+    >
+      <div class="p-6">
+        <BaseAlert 
+          v-if="formError" 
+          type="error" 
+          title="Error en el formulario" 
+          :message="formError" 
+          class="mb-6"
+        />
+
+        <form @submit.prevent="submitForm" class="space-y-5">
+          <!-- Nombre Completo -->
+          <BaseInput
+            v-model="formData.name"
+            id="worker-name"
+            label="Nombre Completo"
+            placeholder="Ej: Juan Pérez"
+            required
+            :disabled="formLoading"
+          />
+
+          <!-- Selector de Documento -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Tipo de Documento (UI Falsa para manejar la lógica internamente) -->
+            <div class="space-y-1">
+              <label class="block text-sm font-semibold text-text-base ml-1">Tipo de Documento</label>
+              <div class="h-11 flex border border-surface-border rounded-lg overflow-hidden bg-body p-1">
+                <button
+                  type="button"
+                  class="flex-1 text-sm font-bold rounded-md transition-all border-none outline-none"
+                  :class="docType === 'RUT' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text-base hover:bg-surface-hover'"
+                  @click="docType = 'RUT'"
+                  :disabled="formLoading"
+                >
+                  RUT (Chile)
+                </button>
+                <button
+                  type="button"
+                  class="flex-1 text-sm font-bold rounded-md transition-all border-none outline-none"
+                  :class="docType === 'DNI' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text-base hover:bg-surface-hover'"
+                  @click="docType = 'DNI'"
+                  :disabled="formLoading"
+                >
+                  DNI (Ext.)
+                </button>
+              </div>
+            </div>
+
+            <!-- Input Documento -->
+            <BaseInput
+              v-model="documentValue"
+              id="worker-doc"
+              :label="docType === 'RUT' ? 'Número de RUT' : 'Número de Documento'"
+              :placeholder="docType === 'RUT' ? 'Ej: 12345678-9' : 'Ej: AB123456'"
+              required
+              :disabled="formLoading"
+            />
+          </div>
+
+          <!-- Valor Hora y Fecha Ingreso -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <BaseInput
+              v-model.number="formData.hourly_rate"
+              id="worker-rate"
+              type="number"
+              label="Valor Hora ($)"
+              placeholder="Ej: 5000"
+              required
+              min="0"
+              :disabled="formLoading"
+            />
+
+            <BaseInput
+              v-model="formData.start_date"
+              id="worker-start"
+              type="date"
+              label="Fecha de Ingreso"
+              required
+              :disabled="formLoading"
+            />
+          </div>
+
+          <!-- Foto del Trabajador (Opcional) -->
+          <div>
+            <label class="block text-sm font-semibold text-text-base ml-1 mb-1">Foto del Trabajador (Opcional)</label>
+            <div class="flex items-center gap-4 border border-surface-border rounded-xl p-3 bg-surface">
+              <div v-if="formData.photo" class="w-16 h-16 rounded-full overflow-hidden shrink-0 border-2 border-primary/20">
+                <img :src="formData.photo" class="w-full h-full object-cover" />
+              </div>
+              <div v-else class="w-16 h-16 rounded-full shrink-0 flex items-center justify-center bg-body text-text-muted border border-surface-border border-dashed">
+                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+              </div>
+
+              <div class="flex-1 mt-1 sm:mt-0 relative group">
+                <BaseButton type="button" variant="outline" class="w-full" size="sm" @click="triggerPhotoUpload">
+                  {{ formData.photo ? 'Cambiar Foto' : 'Subir Foto' }}
+                </BaseButton>
+                <input 
+                  type="file" 
+                  ref="photoInputRef" 
+                  accept="image/jpeg, image/png, image/webp" 
+                  @change="handlePhotoUpload" 
+                  class="hidden"
+                />
+              </div>
+
+              <!-- Remover Foto Actual -->
+              <button 
+                v-if="formData.photo" 
+                type="button" 
+                @click="formData.photo = null" 
+                class="shrink-0 p-2 text-danger hover:bg-danger/10 rounded-lg transition-colors border-none"
+                title="Eliminar Foto"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Footer Botones -->
+          <div class="flex justify-end gap-3 pt-4 border-t border-surface-border mt-6">
+            <BaseButton type="button" variant="outline" @click="closeModal" :disabled="formLoading">
+              Cancelar
+            </BaseButton>
+            <BaseButton type="submit" variant="primary" :is-loading="formLoading">
+              {{ isEditing ? 'Guardar Cambios' : 'Crear Trabajador' }}
+            </BaseButton>
+          </div>
+        </form>
+      </div>
+    </BaseModal>
+
+    <!-- Modal Detalles de Trabajador -->
+    <BaseModal 
+      :is-open="isDetailsModalOpen" 
+      @close="closeDetailsModal" 
+      title="Resumen del Trabajador"
+      max-width="md"
+    >
+      <div class="p-6" v-if="selectedWorkerDetails">
+        <div class="flex items-center gap-4 mb-6">
+          <div class="w-14 h-14 rounded-full bg-primary/20 border-2 border-primary/20 text-primary flex items-center justify-center text-2xl font-bold overflow-hidden shrink-0">
+            <img v-if="selectedWorkerDetails.photo" :src="selectedWorkerDetails.photo" class="w-full h-full object-cover"/>
+            <span v-else>{{ selectedWorkerDetails.name.charAt(0).toUpperCase() }}</span>
+          </div>
+          <div>
+            <h3 class="text-xl font-bold text-text-base">{{ selectedWorkerDetails.name }}</h3>
+            <BaseBadge :variant="selectedWorkerDetails.status === 'ACTIVE' ? 'success' : 'danger'" class="mt-1">
+              {{ selectedWorkerDetails.status === 'ACTIVE' ? 'ACTIVO' : 'INACTIVO' }}
+            </BaseBadge>
+          </div>
+        </div>
+
+        <div class="space-y-5">
+          <div class="grid grid-cols-2 gap-4 bg-surface p-4 rounded-xl border border-surface-border">
+            <div>
+              <p class="text-xs text-text-muted font-semibold uppercase tracking-wider">Documento</p>
+              <p class="font-mono text-sm mt-1 text-text-base">{{ selectedWorkerDetails.rut || selectedWorkerDetails.dni || 'No registrado' }}</p>
+            </div>
+            <div>
+              <p class="text-xs text-text-muted font-semibold uppercase tracking-wider">Valor Hora</p>
+              <p class="font-mono text-emerald-500 font-medium mt-1 text-sm">${{ selectedWorkerDetails.hourly_rate.toLocaleString('es-CL') }} / hr</p>
+            </div>
+            <div class="col-span-2">
+              <p class="text-xs text-text-muted font-semibold uppercase tracking-wider">Fecha Ingreso</p>
+              <p class="text-sm mt-1 text-text-base">{{ selectedWorkerDetails.start_date ? formatDate(selectedWorkerDetails.start_date) : 'No registrado' }}</p>
+            </div>
+          </div>
+          
+          <div>
+            <h4 class="text-sm font-bold text-text-base mb-3 flex items-center gap-2">
+              <svg class="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+              Datos de Auditoría
+            </h4>
+            <div class="bg-body p-4 rounded-xl border border-surface-border space-y-3 text-xs">
+              <div class="flex justify-between border-b border-surface-border pb-2">
+                <span class="text-text-muted">ID Interno en BD:</span>
+                <span class="text-text-base font-mono font-bold">#{{ selectedWorkerDetails.id }}</span>
+              </div>
+              <div class="flex justify-between border-b border-surface-border pb-2">
+                <span class="text-text-muted">Desempeño actual:</span>
+                <span class="text-text-base">{{ selectedWorkerDetails.status === 'ACTIVE' ? 'En operaciones' : 'Dado de baja' }}</span>
+              </div>
+              <div class="flex justify-between border-b border-surface-border pb-2">
+                <span class="text-text-muted">Fecha de Creación:</span>
+                <span class="text-text-base">{{ formatDateTime(selectedWorkerDetails.created_at) }}</span>
+              </div>
+              <div class="flex justify-between pb-1">
+                <span class="text-text-muted">Última Modificación:</span>
+                <span class="text-text-base">{{ selectedWorkerDetails.updated_at ? formatDateTime(selectedWorkerDetails.updated_at) : 'Sin modificaciones' }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer Botones -->
+        <div class="flex justify-end pt-5 mt-2">
+          <BaseButton type="button" variant="primary" @click="closeDetailsModal">
+            Entendido
+          </BaseButton>
+        </div>
+      </div>
+    </BaseModal>
+
+    <!-- Modal Emergente de Errores (Global UI) -->
+    <BaseModal 
+      :is-open="isErrorModalOpen" 
+      @close="isErrorModalOpen = false" 
+      title="Atención requerida"
+      type="error"
+      max-width="sm"
+    >
+      <div class="px-2 py-4">
+        <p class="text-text-base text-lg font-medium text-center">
+          {{ errorModalMessage }}
+        </p>
+      </div>
+      <template #footer>
+        <BaseButton variant="secondary" class="w-full" @click="isErrorModalOpen = false">
+          Entendido
+        </BaseButton>
+    <!-- Modal de Adelantos -->
+    <BaseModal
+      v-model:is-open="isAdvModalOpen"
+      :title="`Adelantos - ${selectedWorkerForAdv?.name}`"
+      size="md"
+      @close="closeAdvances"
+    >
+      <div class="space-y-4">
+        <form @submit.prevent="submitAdvance" class="space-y-3 bg-surface-muted/50 p-4 rounded-xl border border-surface-border">
+          <h4 class="text-sm font-bold text-text-base uppercase tracking-wider">Registrar Nuevo Adelanto</h4>
+          <div class="grid grid-cols-2 gap-3">
+            <BaseInput v-model="newAdv.date" type="date" required label="Fecha" />
+            <BaseInput v-model.number="newAdv.amount" type="number" required min="1" step="1000" label="Monto ($)" />
+          </div>
+          <BaseInput v-model="newAdv.notes" type="text" label="Observación (Opcional)" placeholder="Ej: Transporte, salud..." />
+          <BaseButton type="submit" variant="primary" class="w-full" :is-loading="advLoading">Agregar Adelanto</BaseButton>
+        </form>
+
+        <div class="mt-4 pt-4 border-t border-surface-border/50">
+          <h4 class="text-sm font-bold text-text-base mb-3 flex items-center justify-between">
+            <span>Historial (Mes Actual)</span>
+            <span class="text-xs font-normal text-text-muted">Total: ${{ totalAdvancesMoth.toLocaleString("es-CL") }}</span>
+          </h4>
+          <div v-if="advLoadingList" class="text-center py-4 text-text-muted text-sm animate-pulse">Cargando historial...</div>
+          <div v-else-if="advances.length === 0" class="text-center py-4 text-text-muted text-sm italic">Sin adelantos este mes.</div>
+          <ul v-else class="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
+            <li v-for="adv in advances" :key="adv.id" class="flex justify-between items-center bg-surface-base border border-surface-border p-3 rounded-lg shadow-sm">
+              <div>
+                <strong class="text-emerald-500 font-mono">${{ adv.amount.toLocaleString("es-CL") }}</strong>
+                <p class="text-xs text-text-muted mt-0.5">{{ formatDate(adv.date) }} <span v-if="adv.notes" class="italic">- {{ adv.notes }}</span></p>
+              </div>
+              <button @click="deleteAdvance(adv.id)" class="text-danger hover:bg-danger/10 p-2 rounded-lg transition-colors border-none" title="Eliminar este adelanto">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <template #footer>
+        <BaseButton variant="secondary" class="w-full" @click="closeAdvances">Cerrar</BaseButton>
+      </template>
+    </BaseModal>
+
+      </template>
+    </BaseModal>
+  </div>
+    <!-- Modal de Adelantos -->
+    <BaseModal
+      v-model:is-open="isAdvModalOpen"
+      :title="`Adelantos - ${selectedWorkerForAdv?.name}`"
+      size="md"
+      @close="closeAdvances"
+    >
+      <div class="space-y-4">
+        <form @submit.prevent="submitAdvance" class="space-y-3 bg-surface-muted/50 p-4 rounded-xl border border-surface-border">
+          <h4 class="text-sm font-bold text-text-base uppercase tracking-wider">Registrar Nuevo Adelanto</h4>
+          <div class="grid grid-cols-2 gap-3">
+            <BaseInput v-model="newAdv.date" type="date" required label="Fecha" />
+            <BaseInput v-model.number="newAdv.amount" type="number" required min="1" step="1000" label="Monto ($)" />
+          </div>
+          <BaseInput v-model="newAdv.notes" type="text" label="Observación (Opcional)" placeholder="Ej: Transporte, salud..." />
+          <BaseButton type="submit" variant="primary" class="w-full" :is-loading="advLoading">Agregar Adelanto</BaseButton>
+        </form>
+
+        <div class="mt-4 pt-4 border-t border-surface-border/50">
+          <h4 class="text-sm font-bold text-text-base mb-3 flex items-center justify-between">
+            <span>Historial (Mes Actual)</span>
+            <span class="text-xs font-normal text-text-muted">Total: ${{ totalAdvancesMoth.toLocaleString("es-CL") }}</span>
+          </h4>
+          <div v-if="advLoadingList" class="text-center py-4 text-text-muted text-sm animate-pulse">Cargando historial...</div>
+          <div v-else-if="advances.length === 0" class="text-center py-4 text-text-muted text-sm italic">Sin adelantos este mes.</div>
+          <ul v-else class="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
+            <li v-for="adv in advances" :key="adv.id" class="flex justify-between items-center bg-surface-base border border-surface-border p-3 rounded-lg shadow-sm">
+              <div>
+                <strong class="text-emerald-500 font-mono">${{ adv.amount.toLocaleString("es-CL") }}</strong>
+                <p class="text-xs text-text-muted mt-0.5">{{ formatDate(adv.date) }} <span v-if="adv.notes" class="italic">- {{ adv.notes }}</span></p>
+              </div>
+              <button @click="deleteAdvance(adv.id)" class="text-danger hover:bg-danger/10 p-2 rounded-lg transition-colors border-none" title="Eliminar este adelanto">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <template #footer>
+        <BaseButton variant="secondary" class="w-full" @click="closeAdvances">Cerrar</BaseButton>
+      </template>
+    </BaseModal>
+
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, watch } from 'vue';
+import { WorkerChannels } from '../../../shared/types/ipc';
+import type { Worker, WorkerStatus } from '../../../shared/types/worker';import { useConfigStore } from '../../stores/configStore';
+import BaseCard from '../../components/ui/BaseCard.vue';
+import BaseTable from '../../components/ui/BaseTable.vue';
+import BaseButton from '../../components/ui/BaseButton.vue';
+import BaseBadge from '../../components/ui/BaseBadge.vue';
+import BaseInput from '../../components/ui/BaseInput.vue';
+import BaseModal from '../../components/ui/BaseModal.vue';
+import BaseAlert from '../../components/ui/BaseAlert.vue';
+
+// ================= ESTADO DE LA VISTA =================
+const workers = ref<Worker[]>([]);
+const loading = ref(true);
+const errorGlobal = ref('');
+const successGlobal = ref('');
+const searchQuery = ref('');
+const statusFilter = ref('ALL');
+const filterDateFrom = ref('');
+const filterDateTo = ref('');
+
+// ================= DEFINICIÓN DE TABLA =================
+const configStore = useConfigStore();
+const tableColumns = [
+  { key: 'name', label: 'Nombre Completo' },
+  { key: 'document', label: 'Documento' },
+  { key: 'hourly_rate', label: 'Valor Hora' },
+  { key: 'overtime', label: 'Hora Extra' },
+  { key: 'start_date', label: 'F. Ingreso' },
+  { key: 'status', label: 'Estado', align: 'center' as const },
+  { key: 'actions', label: 'Acciones', align: 'right' as const }
+];
+
+// Filtrado reactivo en el frontend para búsqueda y estado
+const filteredWorkers = computed(() => {
+  return workers.value.filter(w => {
+    // 1. Filtrar por Estado
+    if (statusFilter.value !== 'ALL' && w.status !== statusFilter.value) {
+      return false;
+    }
+    
+    // 2. Rango de Fechas
+    if (w.start_date) {
+      if (filterDateFrom.value && w.start_date < filterDateFrom.value) {
+        return false;
+      }
+      if (filterDateTo.value && w.start_date > filterDateTo.value) {
+        return false;
+      }
+    }
+
+    // 3. Filtrar por Búsqueda (Nombre o Documento)
+    if (searchQuery.value.trim()) {
+      const q = searchQuery.value.toLowerCase();
+      const matchesSearch = w.name.toLowerCase().includes(q) ||
+                            (w.rut && w.rut.toLowerCase().includes(q)) ||
+                            (w.dni && w.dni.toLowerCase().includes(q));
+      if (!matchesSearch) return false;
+    }
+
+    return true;
+  });
+});
+
+const loadWorkers = async () => {
+  loading.value = true;
+  errorGlobal.value = '';
+  try {
+    const data = await window.electron.invoke(WorkerChannels.GET_ALL);
+    workers.value = data || [];
+  } catch (err: any) {
+    console.error('Error cargando trabajadores:', err);
+    errorGlobal.value = err.message || 'Error al conectar con la base de datos.';
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(async () => {
+  loadWorkers();
+  if (!configStore.config) {
+    await configStore.loadConfig();
+  }
+});
+
+// ================= ADELANTOS LÓGICA =================
+const isAdvModalOpen = ref(false);
+const selectedWorkerForAdv = ref<Worker | null>(null);
+const newAdv = ref({ amount: 0, date: new Date().toLocaleDateString("sv-SE", {timeZone: "America/Santiago"}), notes: "" });
+const advances = ref<any[]>([]);
+const advLoading = ref(false);
+const advLoadingList = ref(false);
+const totalAdvancesMoth = computed(() => advances.value.reduce((acc, curr) => acc + curr.amount, 0));
+
+const openAdvances = async (w: Worker) => {
+  selectedWorkerForAdv.value = w;
+  isAdvModalOpen.value = true;
+  newAdv.value = { amount: 0, date: new Date().toLocaleDateString("sv-SE", {timeZone: "America/Santiago"}), notes: "" };
+  await loadAdvances();
+};
+
+const closeAdvances = () => {
+  isAdvModalOpen.value = false;
+  selectedWorkerForAdv.value = null;
+  advances.value = [];
+};
+
+const loadAdvances = async () => {
+  if (!selectedWorkerForAdv.value) return;
+  advLoadingList.value = true;
+  try {
+    const d = new Date();
+    const result = await window.electron.invoke(WorkerChannels.ADVANCE_LIST, { workerId: selectedWorkerForAdv.value.id, year: d.getFullYear(), month: d.getMonth() + 1 });
+    if (result.ok) {
+      advances.value = result.data || [];
+    } else {
+      showError("Error al cargar adelantos: " + result.error);
+    }
+  } catch (e: any) {
+    showError("Error crítico al cargar adelantos: " + e.message);
+  } finally {
+    advLoadingList.value = false;
+  }
+};
+
+const submitAdvance = async () => {
+  if (!selectedWorkerForAdv.value) return;
+  
+  advLoading.value = true;
+  try {
+    const result = await window.electron.invoke(WorkerChannels.ADVANCE_ADD, {
+      worker_id: selectedWorkerForAdv.value.id,
+      amount: newAdv.value.amount,
+      date: newAdv.value.date,
+      notes: newAdv.value.notes.trim() || null
+    });
+    if (result.ok) {
+      newAdv.value = { amount: 0, date: new Date().toLocaleDateString("sv-SE", {timeZone: "America/Santiago"}), notes: "" };
+      await loadAdvances();
+    } else {
+      showError("Error al guardar adelanto: " + result.error);
+    }
+  } catch (e: any) {
+    showError("Error guardando adelanto: " + e.message);
+  } finally {
+    advLoading.value = false;
+  }
+};
+
+const deleteAdvance = async (id: number) => {
+  if (!confirm("¿Eliminar este adelanto?")) return;
+  advLoadingList.value = true;
+  try {
+    const result = await window.electron.invoke(WorkerChannels.ADVANCE_DELETE, id);
+    if (result.ok) {
+      await loadAdvances();
+    } else {
+      showError("Error al eliminar: " + result.error);
+    }
+  } catch (e: any) {
+    showError(e.message);
+  } finally {
+    advLoadingList.value = false;
+  }
+};
+
+// ================= MODAL LÓGICA =================
+const isModalOpen = ref(false);
+const isEditing = ref(false);
+const formLoading = ref(false);
+const formError = ref('');
+
+// Helper UI para Documento
+const docType = ref<'RUT' | 'DNI'>('RUT');
+const documentValue = ref('');
+
+// Formateador de RUT visual
+const formatRut = (rut: string) => {
+  let cleanRut = rut.replace(/[^0-9Kk]/g, '').toUpperCase();
+  if (cleanRut.length === 0) return '';
+  if (cleanRut.length === 1) return cleanRut;
+  const body = cleanRut.slice(0, -1);
+  const dv = cleanRut.slice(-1);
+  const formattedBody = body.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `${formattedBody}-${dv}`;
+};
+
+// Formatea el RUT mientras el administrador escribe
+watch(() => documentValue.value, (newVal) => {
+  if (docType.value === 'RUT' && newVal) {
+    const formatted = formatRut(newVal);
+    if (documentValue.value !== formatted) {
+      documentValue.value = formatted;
+    }
+  } else if (docType.value === 'DNI' && newVal) {
+    documentValue.value = newVal.toUpperCase();
+  }
+});
+
+// Limpiar el campo si cambian de tipo
+watch(docType, () => {
+  documentValue.value = '';
+  formError.value = '';
+});
+
+// Base del formulario
+const initialFormState = {
+  id: 0,
+  name: '',
+  hourly_rate: 0,
+  start_date: new Date().toLocaleDateString('sv-SE', {timeZone: 'America/Santiago'}),
+  photo: null as string | null
+};
+const formData = ref({ ...initialFormState });
+
+const resetForm = () => {
+  formData.value = { ...initialFormState };
+  docType.value = 'RUT';
+  documentValue.value = '';
+  formError.value = '';
+  photoInputRef.value = null;
+};
+
+// ================= FOTOS =================
+const photoInputRef = ref<HTMLInputElement | null>(null);
+
+const triggerPhotoUpload = () => {
+  photoInputRef.value?.click();
+};
+
+const handlePhotoUpload = (e: Event) => {
+  const target = e.target as HTMLInputElement;
+  if (!target.files || !target.files[0]) return;
+
+  const file = target.files[0];
+  if (!file.type.match('image.*')) {
+    formError.value = 'El archivo seleccionado no es una imagen válida.';
+    return;
+  }
+  
+  // Limitar a ~2MB por ejemplo, o simplemente permitir base64 si sqlite lo soporta.
+  if (file.size > 2 * 1024 * 1024) {
+    formError.value = 'La imagen es demasiado grande. Seleccione una menor a 2MB.';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = (reEvent) => {
+    formData.value.photo = reEvent.target?.result as string;
+    formError.value = ''; // clears error just in case
+  };
+  reader.readAsDataURL(file);
+};
+
+const removePhoto = () => {
+  formData.value.photo = null;
+  if (photoInputRef.value) {
+    photoInputRef.value.value = '';
+  }
+};
+
+const openCreateModal = () => {
+  resetForm();
+  isEditing.value = false;
+  isModalOpen.value = true;
+};
+
+const openEditModal = (worker: Worker) => {
+  resetForm();
+  isEditing.value = true;
+  formData.value = {
+    id: worker.id,
+    name: worker.name,
+    hourly_rate: worker.hourly_rate,
+    start_date: worker.start_date || new Date().toLocaleDateString('sv-SE', {timeZone: 'America/Santiago'}),
+    photo: worker.photo || null
+  };
+  
+  if (worker.rut) {
+    docType.value = 'RUT';
+    documentValue.value = worker.rut;
+  } else if (worker.dni) {
+    docType.value = 'DNI';
+    documentValue.value = worker.dni;
+  }
+  
+  isModalOpen.value = true;
+};
+
+const closeModal = () => {
+  if (formLoading.value) return;
+  isModalOpen.value = false;
+};
+
+// Estado de la Alerta Emergent
+const isErrorModalOpen = ref(false);
+const errorModalMessage = ref('');
+
+const showError = (err: any) => {
+  let message = err.message || 'Ocurrió un error inesperado al procesar la solicitud.';
+  
+  // Limpiar el ruido del IPC de Electron
+  message = message.replace(/Error invoking remote method '.*?': Error: /, '');
+  
+  // Casos comunes de Base de Datos
+  if (message.includes('CHECK constraint failed: hourly_rate > 0')) {
+    message = 'El valor por hora debe ser mayor a 0.';
+  } else if (message.includes('CHECK constraint failed: hourly_rate >= 0')) {
+    message = 'El valor por hora no puede ser negativo.';
+  } else if (message.includes('UNIQUE constraint failed: workers.rut')) {
+    message = 'El RUT ingresado ya está registrado en el sistema.';
+  } else if (message.includes('UNIQUE constraint failed: workers.dni')) {
+    message = 'El DNI o Documento ingresado ya está registrado en el sistema.';
+  } else if (message.includes('NOT NULL constraint')) {
+    message = 'Faltan campos obligatorios que debe completar.';
+  }
+  
+  errorModalMessage.value = message;
+  isErrorModalOpen.value = true;
+};
+
+// ================= CREAR / ACTUALIZAR =================
+const submitForm = async () => {
+  formError.value = '';
+  
+  if (!formData.value.name.trim()) {
+    formError.value = 'El nombre es obligatorio.';
+    return;
+  }
+  if (!documentValue.value.trim()) {
+    formError.value = `El número de ${docType.value} es obligatorio.`;
+    return;
+  }
+
+  // Validar RUT antes de enviar
+  if (docType.value === 'RUT') {
+    const rutRegex = /^[0-9]{1,2}(\.[0-9]{3})*-[0-9K]$/;
+    if (!rutRegex.test(documentValue.value.trim())) {
+      formError.value = 'Formato de RUT inválido. Ingresa números y guión (Ej: 12.345.678-9)';
+      return;
+    }
+  }
+
+  // Preparamos los datos quitando los puntos del RUT
+  const cleanRutValue = docType.value === 'RUT' ? documentValue.value.replace(/\./g, '').trim() : null;
+
+  const payload = {
+    name: formData.value.name.trim(),
+    hourly_rate: Number(formData.value.hourly_rate),
+    start_date: formData.value.start_date,
+    rut: cleanRutValue,
+    dni: docType.value === 'DNI' ? documentValue.value.trim() : null,
+    photo: formData.value.photo
+  };
+
+  formLoading.value = true;
+  try {
+    let msg = '';
+    if (isEditing.value) {
+      await window.electron.invoke(WorkerChannels.UPDATE, {
+        id: formData.value.id,
+        data: payload
+      });
+      msg = 'Trabajador actualizado exitosamente.';
+    } else {
+      await window.electron.invoke(WorkerChannels.CREATE, payload);
+      msg = 'Trabajador creado exitosamente.';
+    }
+    
+    // Si todo salió bien, cerramos e insistimos la recarga
+    closeModal();
+    successGlobal.value = msg;
+    setTimeout(() => successGlobal.value = '', 4000);
+    
+    loadWorkers();
+  } catch (err: any) {
+    showError(err);
+  } finally {
+    formLoading.value = false;
+  }
+};
+
+// ================= ELIMINAR / RESTAURAR =================
+const toggleStatus = async (worker: Worker) => {
+  const newStatus: WorkerStatus = worker.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+  
+  // Opcional: Podríamos agregar un confirm() nativo de navegador o SweetAlert
+  // if (!confirm(`¿Estás seguro de ${newStatus === 'INACTIVE' ? 'desactivar' : 'activar'} a ${worker.name}?`)) return;
+
+  try {
+    await window.electron.invoke(WorkerChannels.DELETE, { 
+      id: worker.id, 
+      status: newStatus 
+    });
+    // Actualizamos localmente para más velocidad (optimistic update)
+    worker.status = newStatus;
+    successGlobal.value = newStatus === 'ACTIVE' ? 'Trabajador reactivado con éxito.' : 'Trabajador desactivado con éxito.';
+    setTimeout(() => successGlobal.value = '', 4000);
+  } catch (err: any) {
+    errorGlobal.value = err.message || 'Error cambiando el estado del trabajador.';
+  }
+};
+
+const promptHardDelete = async (worker: Worker) => {
+  if (!confirm(`¡ADVERTENCIA PÉRDIDA DE DATOS!\n¿Estás absolutamente seguro de eliminar permanentemente a ${worker.name}? Esto eliminará todo su historial de marcaje y NO se puede deshacer.`)) return;
+
+  try {
+    await window.electron.invoke(WorkerChannels.HARD_DELETE, worker.id);
+    successGlobal.value = 'Trabajador eliminado permanentemente de la base de datos.';
+    setTimeout(() => successGlobal.value = '', 4000);
+    loadWorkers(); // Re-fetch the layout completely
+  } catch (err: any) {
+    errorGlobal.value = err.message || 'Error al intentar purgar el trabajador.';
+  }
+};
+
+// ================= UTILES =================
+const formatDate = (isoString?: string) => {
+  if (!isoString) return '';
+  const date = new Date(isoString);
+  return new Intl.DateTimeFormat('es-CL', {
+    day: '2-digit', month: '2-digit', year: 'numeric'
+  }).format(date);
+};
+
+const formatDateTime = (isoString?: string) => {
+  if (!isoString) return 'No registrado';
+  try {
+    const date = new Date(isoString);
+    // Verificar si la fecha es inválida (por ejemplo en un mock de BD sin timestamps)
+    if (isNaN(date.getTime())) return 'Desconocido';
+    return new Intl.DateTimeFormat('es-CL', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    }).format(date);
+  } catch(e) {
+    return 'Error de formato';
+  }
+};
+
+// ================= MODAL DETALLES =================
+const isDetailsModalOpen = ref(false);
+const selectedWorkerDetails = ref<any>(null); // Usamos any o Worker porque updated_at podría ser null o undefined
+
+const openDetailsModal = (worker: Worker) => {
+  selectedWorkerDetails.value = worker;
+  isDetailsModalOpen.value = true;
+};
+
+const closeDetailsModal = () => {
+  isDetailsModalOpen.value = false;
+};
+</script>

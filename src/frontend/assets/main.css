@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+
+  :root {
+    --color-primary: 12 74 110;        /* #0c4a6e */
+    --color-primary-hover: 7 89 133;   /* #075985 */
+    --color-primary-light: 14 165 233; /* #0ea5e9 */
+    
+    --color-surface: 255 255 255;      /* #ffffff */
+    --color-surface-muted: 248 250 252;/* #f8fafc */
+    --color-border: 226 232 240;       /* slate-200 */
+    
+    --color-text-base: 30 41 59;       /* slate-800 */
+    --color-text-muted: 100 116 139;   /* slate-500 */
+    --color-body-bg: 241 245 249;      /* slate-100 */
+
+    --color-success: 16 185 129;       /* #10b981 */
+    --color-warning: 245 158 11;       /* #f59e0b */
+    --color-danger: 239 68 68;         /* #ef4444 */
+    --color-info: 56 189 248;          /* #38bdf8 */
+  }
+
+  /* Tema Oscuro */
+  .dark {
+    --color-primary: 14 165 233;       /* #0ea5e9 */
+    --color-primary-hover: 56 189 248; /* #38bdf8 */
+    --color-primary-light: 125 211 252;/* #7dd3fc */
+    
+    --color-surface: 30 41 59;         /* slate-800 */
+    --color-surface-muted: 15 23 42;   /* slate-900 */
+    --color-border: 51 65 85;          /* slate-700 */
+    
+    --color-text-base: 248 250 252;    /* slate-50 -> MUCHO MÁS CLARO para alto contraste en oscuros */
+    --color-text-muted: 148 163 184;   /* slate-400 */
+    --color-body-bg: 15 23 42;         /* slate-900 */
+
+    --color-success: 16 185 129;       /* #10b981 */
+    --color-warning: 245 158 11;       /* #f59e0b */
+    --color-danger: 248 113 113;       /* red-400 */
+    --color-info: 56 189 248;          /* #38bdf8 */
+  }
+}
+
+/* Reset base */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  @apply font-sans antialiased transition-colors duration-300;
+  @apply bg-body text-text-base;
+  overflow: hidden;
+}
+
+

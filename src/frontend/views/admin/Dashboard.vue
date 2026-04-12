@@ -97,6 +97,14 @@
                 >
                   SALIDA: {{ rec.exit_time || '00:00' }}
                 </span>
+                <button 
+                  v-if="isCurrentMonth(rec.date)"
+                  @click="openEditModal(rec)" 
+                  class="p-1.5 text-text-muted hover:text-primary hover:bg-primary/10 rounded-md transition-colors ml-1"
+                  title="Editar tiempos"
+                >
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                </button>
               </div>
             </div>
           </div>
@@ -139,6 +147,32 @@
       </BaseCard>
 
     </div>
+
+    <!-- Modal Editar Tiempos -->
+    <BaseModal 
+      :is-open="isEditModalOpen" 
+      @close="closeEditModal" 
+      title="Editar Registro de Asistencia"
+      max-width="sm"
+    >
+      <div class="p-6">
+        <BaseAlert v-if="editError" type="error" :message="editError" class="mb-4" />
+        
+        <form @submit.prevent="submitEdit" class="space-y-4">
+          <p class="text-sm text-text-muted mb-4">Modificando registro de <strong>{{ editData.worker_name }}</strong> el <strong>{{ formatDateLocale(editData.date) }}</strong>.</p>
+          
+          <div class="grid grid-cols-2 gap-4">
+            <BaseInput v-model="editData.entry_time" type="time" label="Hora Entrada" required />
+            <BaseInput v-model="editData.exit_time" type="time" label="Hora Salida" />
+          </div>
+          
+          <div class="flex justify-end gap-3 pt-4 border-t border-surface-border mt-4">
+            <BaseButton type="button" variant="outline" @click="closeEditModal" :disabled="editLoading">Cancelar</BaseButton>
+            <BaseButton type="submit" variant="primary" :is-loading="editLoading">Guardar</BaseButton>
+          </div>
+        </form>
+      </div>
+    </BaseModal>
   </div>
 </template>
 
@@ -146,6 +180,10 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import BaseCard from '../../components/ui/BaseCard.vue';
+import BaseModal from '../../components/ui/BaseModal.vue';
+import BaseInput from '../../components/ui/BaseInput.vue';
+import BaseButton from '../../components/ui/BaseButton.vue';
+import BaseAlert from '../../components/ui/BaseAlert.vue';
 import { WorkerChannels, AttendanceChannels } from '../../../shared/types/ipc';
 
 const router = useRouter();
@@ -240,5 +278,64 @@ const formatDateLocale = (isoStr: string) => {
   if (!isoStr) return '';
   const [year, month, day] = isoStr.split('-');
   return `${day}/${month}`;
+};
+// ================= EDITAR REGISTRO =================
+const isEditModalOpen = ref(false);
+const editLoading = ref(false);
+const editError = ref('');
+const editData = ref({
+  id: 0,
+  worker_name: '',
+  date: '',
+  entry_time: '',
+  exit_time: ''
+});
+
+const isCurrentMonth = (dateStr: string) => {
+  if (!dateStr) return false;
+  const current = new Date();
+  const currentMonthStr = current.getFullYear() + '-' + String(current.getMonth() + 1).padStart(2, '0');
+  return dateStr.startsWith(currentMonthStr);
+};
+
+const openEditModal = (row: any) => {
+  editError.value = '';
+  editData.value = {
+    id: row.id,
+    worker_name: row.worker_name,
+    date: row.date,
+    entry_time: row.entry_time || '',
+    exit_time: row.exit_time || ''
+  };
+  isEditModalOpen.value = true;
+};
+
+const closeEditModal = () => {
+  isEditModalOpen.value = false;
+};
+
+const submitEdit = async () => {
+  editLoading.value = true;
+  editError.value = '';
+  
+  try {
+    const payload = {
+      id: editData.value.id,
+      entry_time: editData.value.entry_time,
+      exit_time: editData.value.exit_time || null
+    };
+    
+    const result = await window.electron.invoke(AttendanceChannels.UPDATE_RECORD, payload);
+    if (!result.ok) {
+       throw new Error(result.error);
+    }
+    
+    closeEditModal();
+    loadDashboardData(); // Refresh main lists
+  } catch (e: any) {
+    editError.value = e.message || 'Error al actualizar el registro';
+  } finally {
+    editLoading.value = false;
+  }
 };
 </script>

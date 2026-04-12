@@ -31,6 +31,19 @@ export class AdvanceRepository {
     return stmt.all(workerId, pattern) as WorkerAdvance[]
   }
 
+  getAdvancesByMonth(year: number, month: number): WorkerAdvance[] {
+    const db = getDatabase()
+    const monthStr = month.toString().padStart(2, '0')
+    const pattern = `${year}-${monthStr}-%`
+    
+    const stmt = db.prepare(`
+      SELECT * FROM worker_advances 
+      WHERE date LIKE ? 
+      ORDER BY date DESC, created_at DESC
+    `)
+    return stmt.all(pattern) as WorkerAdvance[]
+  }
+
   deleteAdvance(id: number): boolean {
     const db = getDatabase()
     const stmt = db.prepare('DELETE FROM worker_advances WHERE id = ?')

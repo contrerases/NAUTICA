@@ -46,4 +46,17 @@ export function setupAttendanceHandlers() {
       throw new Error(error.issues ? error.issues[0].message : error.message || 'Error al registrar la salida');
     }
   });
+
+  ipcMain.handle(AttendanceChannels.UPDATE_RECORD, (_, data: { id: number; entry_time: string; exit_time?: string | null; break_minutes?: number }) => {
+    try {
+      if (!data.id || !data.entry_time) {
+        throw new Error('Faltan datos requeridos (id, hora de entrada)');
+      }
+      return { ok: true, data: attendanceRepository.updateRecord(data.id, data) };
+    } catch (error: any) {
+       console.error('Error actualizando registro:', error);
+       return { ok: false, error: error.message || 'Error al actualizar el registro' };
+    }
+  });
 }
+

@@ -40,6 +40,7 @@ export enum WorkerChannels {
   VALIDATE_RUT = 'worker:validate-rut',
   ADVANCE_ADD = 'worker:advance-add',
   ADVANCE_LIST = 'worker:advance-list',
+  ADVANCE_LIST_ALL = 'worker:advance-list-all',
   ADVANCE_DELETE = 'worker:advance-delete',
 }
 

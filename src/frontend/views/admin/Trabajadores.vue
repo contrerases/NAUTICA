@@ -458,7 +458,7 @@
 
       </template>
     </BaseModal>
-  </div>
+  
 
 
 
@@ -504,6 +504,7 @@
         <BaseButton variant="secondary" class="w-full" @click="closeAdvances">Cerrar</BaseButton>
       </template>
     </BaseModal>
+  </div>
 </template>
 
 <script setup lang="ts">

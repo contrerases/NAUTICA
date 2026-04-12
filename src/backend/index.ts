@@ -13,6 +13,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { initDatabase, closeDatabase } from './database/connection'
 import { registerAuthHandlers } from './ipc/authHandlers'
 import { setupWorkerHandlers } from './ipc/workerHandlers'
+import { AuthService } from './services/authService'
 import { setupAttendanceHandlers } from './ipc/attendanceHandlers'
 import { registerConfigHandlers } from './ipc/configHandlers'
 
@@ -115,7 +116,6 @@ app.whenReady().then(async () => {
     console.log('[App] Base de datos inicializada')
     
     // Asegurar que el usuario administrador inicial existe
-    const { AuthService } = await import('./services/authService')
     await AuthService.ensureDefaultAdmin()
     console.log('[App] Auth asegurado')
   } catch (error) {

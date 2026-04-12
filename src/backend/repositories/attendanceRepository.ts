@@ -5,6 +5,111 @@ import { workerRepository } from './workerRepository';
 import { format } from 'date-fns';
 
 export class AttendanceRepository {
+  updateRecord(id: number, data: { entry_time: string, exit_time?: string | null, break_minutes?: number }): import('../../shared/types/attendance').AttendanceRecord {
+    const record = this.getOne('SELECT * FROM attendance_records WHERE id = ?', [id]);
+    if (!record) throw new Error('Registro no encontrado');
+
+    const currentMonth = format(new Date(), 'yyyy-MM');
+    if (!record.date.startsWith(currentMonth)) {
+      throw new Error('Solo se pueden modificar registros del mes en curso');
+    }
+
+    // 1. Recalcular delay_minutes
+    const startParts = record.start_hour_snap.split(':').map(Number);
+    const startMins = startParts[0] * 60 + startParts[1];
+
+    const entryParts = data.entry_time.split(':').map(Number);
+    const rawEntryMins = entryParts[0] * 60 + entryParts[1];
+
+    let effEntryMins = rawEntryMins;
+    if (rawEntryMins > startMins && rawEntryMins <= (startMins + record.tolerance_mins_snap)) {
+      effEntryMins = startMins;
+    }
+
+    let delayMins = effEntryMins > startMins ? effEntryMins - startMins : 0;
+    if (delayMins > 0) {
+      delayMins = effEntryMins - (startMins + record.tolerance_mins_snap);
+      if (delayMins < 0) delayMins = 0;
+    }
+
+    const exit_time = data.exit_time !== undefined ? data.exit_time : record.exit_time;
+
+    const db = getDatabase();
+
+    if (!exit_time) {
+      const sql = `
+        UPDATE attendance_records
+        SET entry_time = @entry_time, exit_time = NULL, status = 'OPEN', delay_minutes = @delay_minutes,
+            worked_minutes = 0, overtime_minutes = 0, overtime_payment = 0, daily_payment = 0
+        WHERE id = @id
+      `;
+      db.prepare(sql).run({ entry_time: data.entry_time, delay_minutes: delayMins, id });
+    } else {
+      // 2. Recalcular salida
+      let entryMinsCalc = effEntryMins;
+      if (entryMinsCalc < startMins) {
+        entryMinsCalc = startMins;
+      }
+
+      const exitParts = exit_time.split(':').map(Number);
+      let exitMins = exitParts[0] * 60 + exitParts[1];
+
+      const exitTolerance = record.exit_tolerance_mins_snap || 15;
+      if (record.exit_hour_snap) {
+          const officialExitParts = record.exit_hour_snap.split(':').map(Number);
+          const officialExitMins = officialExitParts[0] * 60 + officialExitParts[1];
+          if (exitMins < officialExitMins && exitMins >= (officialExitMins - exitTolerance)) {
+            exitMins = officialExitMins;
+          }
+      }
+
+      const breakMins = data.break_minutes !== undefined ? data.break_minutes : (record.break_minutes || 0);
+      let workedMins = exitMins - entryMinsCalc - breakMins;
+      if (workedMins < 0) workedMins = 0;
+
+      const baseDailyLimitMins = record.base_daily_hours_snap * 60;
+      let overtimeMins = 0;
+      if (workedMins > baseDailyLimitMins) {
+        overtimeMins = workedMins - baseDailyLimitMins;
+      }
+
+      const multiplier = record.overtime_multiplier_snap ?? 1.5;
+      const overtimePayment = (overtimeMins / 60) * (record.hourly_rate_snap * multiplier);
+      const baseWorkedMinsForPay = Math.min(workedMins, baseDailyLimitMins);
+      const basePayment = (baseWorkedMinsForPay / 60) * record.hourly_rate_snap;
+
+      let penaltyPay = 0;
+      if (delayMins > 0) {
+        penaltyPay = (delayMins / 60) * record.hourly_rate_snap;
+      }
+
+      let dailyPayment = basePayment + overtimePayment - penaltyPay;
+      if (dailyPayment < 0) dailyPayment = 0;
+
+      const sql = `
+        UPDATE attendance_records
+        SET entry_time = @entry_time, exit_time = @exit_time, delay_minutes = @delay_minutes, status = 'CLOSED',
+            break_minutes = @break_minutes, worked_minutes = @worked_minutes, overtime_minutes = @overtime_minutes,
+            overtime_payment = @overtime_payment, daily_payment = @daily_payment
+        WHERE id = @id
+      `;
+
+      db.prepare(sql).run({
+        entry_time: data.entry_time,
+        exit_time: exit_time,
+        delay_minutes: delayMins,
+        break_minutes: breakMins,
+        worked_minutes: workedMins,
+        overtime_minutes: overtimeMins,
+        overtime_payment: Math.round(overtimePayment),
+        daily_payment: Math.round(dailyPayment),
+        id: id
+      });
+    }
+
+    return this.getOne('SELECT * FROM attendance_records WHERE id = ?', [id])!;
+  }
+
   private execAndMap(sql: string, params: any = []): AttendanceRecord[] {
     const db = getDatabase();
     return db.prepare(sql).all(...params) as AttendanceRecord[];

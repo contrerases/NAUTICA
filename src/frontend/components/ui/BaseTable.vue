@@ -44,7 +44,8 @@
           v-else
           v-for="(row, idx) in data"
           :key="idx"
-          class="hover:bg-surface-hover transition-colors group cursor-default"
+          @click="$emit('row-click', row)"
+          class="hover:bg-surface-hover transition-colors group cursor-pointer"
         >
           <td
             v-for="col in columns"

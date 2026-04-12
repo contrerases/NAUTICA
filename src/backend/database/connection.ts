@@ -54,6 +54,24 @@ async function initDatabase() {
   return db
 }
 
+function forceRunMigrations(database: Database.Database) {
+  // Limpiamos las tablas actuales 
+  try {
+    database.exec(`
+      PRAGMA foreign_keys = OFF;
+      DROP TABLE IF EXISTS attendance_records;
+      DROP TABLE IF EXISTS worker_advances;
+      DROP TABLE IF EXISTS workers;
+      DROP TABLE IF EXISTS users;
+      DROP TABLE IF EXISTS app_config;
+      PRAGMA foreign_keys = ON;
+    `);
+    runMigrations(database);
+  } catch (error) {
+    console.error("Error forzando re-seed:", error);
+  }
+}
+
 function runMigrations(database: Database.Database) {
   let sqlPath
   if (app.isPackaged) {
@@ -68,7 +86,31 @@ function runMigrations(database: Database.Database) {
 
   const sql = fs.readFileSync(sqlPath, 'utf-8')
   database.exec(sql)
-  console.log('[DB] Migraciones ejecutadas correctamente')
+  console.log('[DB] Esquema base ejecutado correctamente')
+
+  // Ejecutar script de semillas (datos de prueba/configuración)
+  let seedsPath
+  if (app.isPackaged) {
+    seedsPath = path.join(process.resourcesPath, 'database', 'seeds.sql')
+  } else {
+    seedsPath = path.join(process.cwd(), 'database', 'seeds.sql')
+  }
+
+  if (fs.existsSync(seedsPath)) {
+    const seedsSql = fs.readFileSync(seedsPath, 'utf-8')
+    const statements = seedsSql.split(';').map(s => s.trim()).filter(s => s.length > 0);
+    for (let i = 0; i < statements.length; i++) {
+      try {
+        database.exec(statements[i]);
+      } catch (err: any) {
+        console.error(`[DB] Error en el seed statement ${i}:`, err.message);
+        console.error(`[DB] Statement fallido: ${statements[i].substring(0, 100)}...`);
+      }
+    }
+    console.log('[DB] Seeds ejecutados correctamente')
+  } else {
+    console.warn('[DB] Archivo de seeds no encontrado, omitiendo...', seedsPath)
+  }
 }
 
 /**

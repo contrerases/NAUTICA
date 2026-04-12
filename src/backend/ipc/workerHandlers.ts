@@ -24,6 +24,15 @@ export function setupWorkerHandlers() {
     }
   });
 
+  ipcMain.handle(WorkerChannels.ADVANCE_LIST_ALL, (_, { year, month }: { year: number, month: number }) => {
+    try {
+      const result = advanceRepository.getAdvancesByMonth(year, month);
+      return { ok: true, data: result };
+    } catch (error: any) {
+      return { ok: false, error: error.message };
+    }
+  });
+
   ipcMain.handle(WorkerChannels.ADVANCE_DELETE, (_, id: number) => {
     try {
       const result = advanceRepository.deleteAdvance(id);

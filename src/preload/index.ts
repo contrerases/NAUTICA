@@ -14,15 +14,25 @@ if (!process.contextIsolated) {
   throw new Error('contextIsolation must be enabled in the BrowserWindow')
 }
 
+// Solo se permiten canales de estos dominios (whitelist): el renderer no puede
+// invocar canales arbitrarios del proceso principal.
+const ALLOWED_CHANNEL = /^(auth|worker|attendance|config|report):[a-z-]+$/
+
 try {
   contextBridge.exposeInMainWorld('electron', {
     invoke: (channel: string, data?: any) => {
+      if (typeof channel !== 'string' || !ALLOWED_CHANNEL.test(channel)) {
+        return Promise.reject(new Error(`Canal IPC no permitido: ${channel}`))
+      }
       return ipcRenderer.invoke(channel, data)
     },
     on: (channel: string, callback: (...args: any[]) => void) => {
-      const subscription = (_event: any, ...args: any[]) => callback(...args);
-      ipcRenderer.on(channel, subscription);
-      return () => ipcRenderer.removeListener(channel, subscription);
+      if (typeof channel !== 'string' || !ALLOWED_CHANNEL.test(channel)) {
+        return () => {}
+      }
+      const subscription = (_event: any, ...args: any[]) => callback(...args)
+      ipcRenderer.on(channel, subscription)
+      return () => ipcRenderer.removeListener(channel, subscription)
     }
   })
 } catch (error) {

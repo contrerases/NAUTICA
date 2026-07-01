@@ -118,74 +118,65 @@
       </BaseTable>
     </BaseCard>
 
-    <!-- Modal para el detalle del trabajador -->
-    <Teleport to="body">
-      <div v-if="selectedWorker" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-        <div class="bg-surface w-full max-w-4xl rounded-2xl shadow-xl flex flex-col overflow-hidden max-h-full">
-          <!-- Cabecera -->
-          <div class="px-6 py-4 border-b border-surface-border flex justify-between items-center bg-body">
-            <h3 class="text-xl font-bold text-text-base">Detalle de Asistencia: {{ selectedWorker.worker_name }}</h3>
-            <button @click="selectedWorker = null" class="text-text-muted hover:text-text-base">
-              <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-              </svg>
-            </button>
-          </div>
-          <!-- Cuerpo -->
-          <div class="p-6 overflow-y-auto flex-1">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 text-sm">
-              <StatCard label="Días Trabajados" :value="selectedWorker.days_worked" color="neutral" />
-              <StatCard label="Horas Totales" :value="formatDuration(selectedWorker.total_minutes)" color="neutral" />
-              <StatCard label="Sueldo Base" :value="formatCLP(selectedWorker.base_payment)" color="primary" />
-              <StatCard label="Pago Extras" :value="formatCLP(selectedWorker.overtime_payment)" color="warning" />
-              <StatCard label="Adelantos (Descuento)" :value="`-${formatCLP(selectedWorker.advances_amount)}`" color="danger" />
-              <BaseCard
-                class="text-center md:col-span-3 text-body"
-                :class="selectedWorker.has_debt ? 'bg-danger border-danger' : 'bg-primary border-primary'"
-                padding="sm"
-              >
-                <span class="block opacity-80 mb-1 text-xs">{{ selectedWorker.has_debt ? 'Deuda del Trabajador' : 'Líquido a Pagar' }}</span>
-                <span class="font-black text-2xl">{{ formatCLP(selectedWorker.net_payment) }}</span>
-              </BaseCard>
-            </div>
-
-            <h4 class="font-bold text-text-base mb-3 border-b border-surface-border pb-2">Registro Diario ({{ filterMonth }})</h4>
-            <table class="w-full text-sm text-left border border-surface-border rounded-lg overflow-hidden">
-              <thead class="bg-surface-muted text-text-muted uppercase text-xs">
-                <tr>
-                  <th class="px-4 py-2 border-b border-surface-border">Fecha</th>
-                  <th class="px-4 py-2 border-b border-surface-border">Entrada</th>
-                  <th class="px-4 py-2 border-b border-surface-border">Salida</th>
-                  <th class="px-4 py-2 border-b border-surface-border text-center">H. Base</th>
-                  <th class="px-4 py-2 border-b border-surface-border text-center">H. Ext.</th>
-                  <th class="px-4 py-2 border-b border-surface-border text-right">Pago Día</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-surface-border">
-                <tr v-if="detailLoading">
-                  <td colspan="6" class="px-4 py-4 text-center text-text-muted">Cargando registros...</td>
-                </tr>
-                <tr v-else-if="selectedWorkerRecords.length === 0">
-                  <td colspan="6" class="px-4 py-4 text-center text-text-muted">No hay registros trabajados.</td>
-                </tr>
-                <tr v-for="rec in selectedWorkerRecords" :key="rec.id" class="hover:bg-surface-hover">
-                  <td class="px-4 py-2 font-mono">{{ rec.date }}</td>
-                  <td class="px-4 py-2">{{ rec.entry_time }}</td>
-                  <td class="px-4 py-2">{{ rec.exit_time || '?' }}</td>
-                  <td class="px-4 py-2 text-center">{{ rec.worked_minutes !== null ? formatDuration(rec.worked_minutes) : '-' }}</td>
-                  <td class="px-4 py-2 text-center text-amber-500">{{ rec.overtime_minutes > 0 ? formatDuration(rec.overtime_minutes) : '-' }}</td>
-                  <td class="px-4 py-2 text-right font-bold text-primary">{{ formatCLP(rec.daily_payment || 0) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <!-- Pie -->
-          <div class="px-6 py-4 border-t border-surface-border bg-body flex justify-end">
-            <BaseButton variant="secondary" @click="selectedWorker = null">Cerrar</BaseButton>
-          </div>
+    <!-- Modal detalle del trabajador -->
+    <BaseModal
+      :is-open="!!selectedWorker"
+      :title="`Detalle de Asistencia: ${selectedWorker?.worker_name ?? ''}`"
+      max-width="4xl"
+      @close="selectedWorker = null"
+    >
+      <div v-if="selectedWorker">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 text-sm">
+          <StatCard label="Días Trabajados" :value="selectedWorker.days_worked" color="neutral" />
+          <StatCard label="Horas Totales" :value="formatDuration(selectedWorker.total_minutes)" color="neutral" />
+          <StatCard label="Sueldo Base" :value="formatCLP(selectedWorker.base_payment)" color="primary" />
+          <StatCard label="Pago Extras" :value="formatCLP(selectedWorker.overtime_payment)" color="warning" />
+          <StatCard label="Adelantos (Descuento)" :value="`-${formatCLP(selectedWorker.advances_amount)}`" color="danger" />
+          <BaseCard
+            class="text-center md:col-span-3 text-body"
+            :class="selectedWorker.has_debt ? 'bg-danger border-danger' : 'bg-primary border-primary'"
+            padding="sm"
+          >
+            <span class="block opacity-80 mb-1 text-xs">{{ selectedWorker.has_debt ? 'Deuda del Trabajador' : 'Líquido a Pagar' }}</span>
+            <span class="font-black text-2xl">{{ formatCLP(selectedWorker.net_payment) }}</span>
+          </BaseCard>
         </div>
+
+        <h4 class="font-bold text-text-base mb-3 border-b border-surface-border pb-2">Registro Diario ({{ filterMonth }})</h4>
+        <table class="w-full text-sm text-left border border-surface-border rounded-lg overflow-hidden">
+          <thead class="bg-surface-muted text-text-muted uppercase text-xs">
+            <tr>
+              <th class="px-4 py-2 border-b border-surface-border">Fecha</th>
+              <th class="px-4 py-2 border-b border-surface-border">Entrada</th>
+              <th class="px-4 py-2 border-b border-surface-border">Salida</th>
+              <th class="px-4 py-2 border-b border-surface-border text-center">H. Base</th>
+              <th class="px-4 py-2 border-b border-surface-border text-center">H. Ext.</th>
+              <th class="px-4 py-2 border-b border-surface-border text-right">Pago Día</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-surface-border">
+            <tr v-if="detailLoading">
+              <td colspan="6" class="px-4 py-4 text-center text-text-muted">Cargando registros...</td>
+            </tr>
+            <tr v-else-if="selectedWorkerRecords.length === 0">
+              <td colspan="6" class="px-4 py-4 text-center text-text-muted">No hay registros trabajados.</td>
+            </tr>
+            <tr v-for="rec in selectedWorkerRecords" :key="rec.id" class="hover:bg-surface-hover">
+              <td class="px-4 py-2 font-mono">{{ rec.date }}</td>
+              <td class="px-4 py-2">{{ rec.entry_time }}</td>
+              <td class="px-4 py-2">{{ rec.exit_time || '?' }}</td>
+              <td class="px-4 py-2 text-center">{{ rec.worked_minutes !== null ? formatDuration(rec.worked_minutes) : '-' }}</td>
+              <td class="px-4 py-2 text-center text-amber-500">{{ rec.overtime_minutes > 0 ? formatDuration(rec.overtime_minutes) : '-' }}</td>
+              <td class="px-4 py-2 text-right font-bold text-primary">{{ formatCLP(rec.daily_payment || 0) }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-    </Teleport>
+
+      <template #footer>
+        <BaseButton variant="secondary" @click="selectedWorker = null">Cerrar</BaseButton>
+      </template>
+    </BaseModal>
 
     <!-- Modal Registrar Adelanto -->
     <BaseModal
@@ -203,7 +194,7 @@
             <option v-for="w in activeWorkers" :key="w.id" :value="w.id">{{ w.name }}</option>
           </BaseSelect>
 
-          <BaseInput v-model.number="advanceData.amount" type="number" label="Monto del Adelanto ($)" required min="1" step="1" />
+          <MoneyInput v-model="advanceData.amount" label="Monto del Adelanto ($)" placeholder="0" />
           <BaseInput v-model="advanceData.date" type="date" label="Fecha" required />
           <BaseInput v-model="advanceData.notes" type="text" label="Notas/Motivo (Opcional)" />
 
@@ -233,6 +224,7 @@ import {
   BaseModal,
   BaseAlert,
   BaseSelect,
+  MoneyInput,
   PageHeader,
   StatCard,
 } from '../../components/ui';

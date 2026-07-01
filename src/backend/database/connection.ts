@@ -64,6 +64,13 @@ export function getDatabase(): Database.Database {
   return db
 }
 
+/** Copia la base de datos a `destPath` (consolidando el WAL primero). Para respaldos. */
+export function backupDatabase(destPath: string): void {
+  if (!db) throw new Error('Base de datos no inicializada.')
+  db.pragma('wal_checkpoint(TRUNCATE)')
+  fs.copyFileSync(getDatabasePath(), destPath)
+}
+
 export function closeDatabase(): void {
   if (db) {
     console.log('[DB] Cerrando conexión...')

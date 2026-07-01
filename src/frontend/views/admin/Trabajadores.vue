@@ -274,14 +274,11 @@
 
           <!-- Valor Hora y Fecha Ingreso -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <BaseInput
-              v-model.number="formData.hourly_rate"
+            <MoneyInput
+              v-model="formData.hourly_rate"
               id="worker-rate"
-              type="number"
               label="Valor Hora ($)"
-              placeholder="Ej: 5000"
-              required
-              min="0"
+              placeholder="Ej: 5.000"
               :disabled="formLoading"
             />
 
@@ -451,7 +448,7 @@
           <h4 class="text-sm font-bold text-text-base uppercase tracking-wider">Registrar Nuevo Adelanto</h4>
           <div class="grid grid-cols-2 gap-3">
             <BaseInput v-model="newAdv.date" type="date" required label="Fecha" />
-            <BaseInput v-model.number="newAdv.amount" type="number" required min="1" step="1000" label="Monto ($)" />
+            <MoneyInput v-model="newAdv.amount" label="Monto ($)" placeholder="Ej: 20.000" />
           </div>
           <BaseInput v-model="newAdv.notes" type="text" label="Observación (Opcional)" placeholder="Ej: Transporte, salud..." />
           <BaseButton type="submit" variant="primary" class="w-full" :is-loading="advLoading">Agregar Adelanto</BaseButton>
@@ -459,20 +456,47 @@
 
         <div class="mt-4 pt-4 border-t border-surface-border/50">
           <h4 class="text-sm font-bold text-text-base mb-3 flex items-center justify-between">
-            <span>Historial (Mes Actual)</span>
-            <span class="text-xs font-normal text-text-muted">Total: {{ formatCLP(totalAdvancesMoth) }}</span>
+            <span>Historial Completo</span>
+            <span class="text-xs font-normal text-text-muted">Mes actual: {{ formatCLP(totalAdvancesMoth) }}</span>
           </h4>
           <div v-if="advLoadingList" class="text-center py-4 text-text-muted text-sm animate-pulse">Cargando historial...</div>
-          <div v-else-if="advances.length === 0" class="text-center py-4 text-text-muted text-sm italic">Sin adelantos este mes.</div>
-          <ul v-else class="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
-            <li v-for="adv in advances" :key="adv.id" class="flex justify-between items-center bg-surface-base border border-surface-border p-3 rounded-lg shadow-sm">
-              <div>
-                <strong class="text-emerald-500 font-mono">{{ formatCLP(adv.amount) }}</strong>
-                <p class="text-xs text-text-muted mt-0.5">{{ formatDate(adv.date) }} <span v-if="adv.notes" class="italic">- {{ adv.notes }}</span></p>
+          <div v-else-if="advances.length === 0" class="text-center py-4 text-text-muted text-sm italic">Sin adelantos registrados.</div>
+          <ul v-else class="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
+            <li v-for="adv in advances" :key="adv.id" class="bg-surface border border-surface-border p-3 rounded-lg shadow-sm">
+              <!-- Modo Edición (solo mes en curso) -->
+              <div v-if="editingAdvId === adv.id" class="space-y-3">
+                <div class="grid grid-cols-2 gap-3">
+                  <BaseInput v-model="editAdv.date" type="date" required label="Fecha" />
+                  <MoneyInput v-model="editAdv.amount" label="Monto ($)" placeholder="Ej: 20.000" />
+                </div>
+                <BaseInput v-model="editAdv.notes" type="text" label="Observación (Opcional)" placeholder="Ej: Transporte, salud..." />
+                <div class="flex justify-end gap-2">
+                  <BaseButton type="button" variant="outline" size="sm" @click="cancelEditAdvance" :disabled="advEditLoading">Cancelar</BaseButton>
+                  <BaseButton type="button" variant="primary" size="sm" @click="saveEditAdvance" :is-loading="advEditLoading">Guardar</BaseButton>
+                </div>
               </div>
-              <button @click="deleteAdvance(adv.id)" class="text-danger hover:bg-danger/10 p-2 rounded-lg transition-colors border-none" title="Eliminar este adelanto">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-              </button>
+
+              <!-- Modo Lectura -->
+              <div v-else class="flex justify-between items-center">
+                <div>
+                  <strong class="text-emerald-500 font-mono">{{ formatCLP(adv.amount) }}</strong>
+                  <p class="text-xs text-text-muted mt-0.5">
+                    {{ formatDate(adv.date) }}
+                    <span v-if="adv.notes" class="italic">- {{ adv.notes }}</span>
+                  </p>
+                </div>
+                <div class="flex items-center gap-1 shrink-0">
+                  <template v-if="isCurrentMonthAdvance(adv)">
+                    <button @click="startEditAdvance(adv)" class="text-primary hover:bg-primary/10 p-2 rounded-lg transition-colors border-none" title="Editar este adelanto">
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                    </button>
+                    <button @click="deleteAdvance(adv.id)" class="text-danger hover:bg-danger/10 p-2 rounded-lg transition-colors border-none" title="Eliminar este adelanto">
+                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    </button>
+                  </template>
+                  <span v-else class="text-[10px] text-text-muted/70 italic uppercase tracking-wider">mes cerrado</span>
+                </div>
+              </div>
             </li>
           </ul>
         </div>
@@ -489,7 +513,8 @@ import { ref, computed, onMounted, watch } from 'vue';
 import type { Worker, WorkerAdvance, CreateWorkerDto, UpdateWorkerDto } from '@shared/types';
 import { formatCLP } from '@shared/utils/money';
 import { isValidRut } from '@shared/utils/rut';
-import { today, currentMonth } from '@shared/utils/date';
+import { today, currentMonth, monthOf } from '@shared/utils/date';
+import { askConfirm } from '../../composables/useConfirm';
 import { api } from '../../api';
 import { useConfigStore } from '../../stores/configStore';
 import { useAdminStore } from '../../stores/adminStore';
@@ -506,6 +531,7 @@ import {
   Avatar,
   IconButton,
   SegmentedToggle,
+  MoneyInput,
 } from '../../components/ui';
 
 // ================= ESTADO DE LA VISTA =================
@@ -593,12 +619,26 @@ const newAdv = ref({ amount: 0, date: today(), notes: "" });
 const advances = ref<WorkerAdvance[]>([]);
 const advLoading = ref(false);
 const advLoadingList = ref(false);
-const totalAdvancesMoth = computed(() => advances.value.reduce((acc, curr) => acc + curr.amount, 0));
+/** Total del mes en curso (solo adelantos del mes actual). */
+const totalAdvancesMoth = computed(() =>
+  advances.value
+    .filter((adv) => isCurrentMonthAdvance(adv))
+    .reduce((acc, curr) => acc + curr.amount, 0),
+);
+
+// Edición inline de un adelanto (solo mes en curso)
+const editingAdvId = ref<number | null>(null);
+const editAdv = ref({ amount: 0, date: today(), notes: "" });
+const advEditLoading = ref(false);
+
+/** ¿El adelanto pertenece al mes en curso? (editable/eliminable). */
+const isCurrentMonthAdvance = (adv: WorkerAdvance) => monthOf(adv.date) === currentMonth();
 
 const openAdvances = async (w: Worker) => {
   selectedWorkerForAdv.value = w;
   isAdvModalOpen.value = true;
   newAdv.value = { amount: 0, date: today(), notes: "" };
+  cancelEditAdvance();
   await loadAdvances();
 };
 
@@ -606,13 +646,16 @@ const closeAdvances = () => {
   isAdvModalOpen.value = false;
   selectedWorkerForAdv.value = null;
   advances.value = [];
+  cancelEditAdvance();
 };
 
 const loadAdvances = async () => {
   if (!selectedWorkerForAdv.value) return;
   advLoadingList.value = true;
   try {
-    advances.value = await api.workers.listAdvances(selectedWorkerForAdv.value.id, currentMonth());
+    const history = await api.workers.advanceHistory(selectedWorkerForAdv.value.id);
+    // Historial completo, ordenado por fecha descendente (más reciente primero)
+    advances.value = history.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   } catch (e: any) {
     showError("Error al cargar adelantos: " + (e.message || e));
   } finally {
@@ -632,6 +675,7 @@ const submitAdvance = async () => {
       notes: newAdv.value.notes.trim() || null,
     });
     newAdv.value = { amount: 0, date: today(), notes: "" };
+    // El modal de adelantos NO se cierra: solo refresca la lista.
     await loadAdvances();
   } catch (e: any) {
     showError("Error al guardar adelanto: " + (e.message || e));
@@ -640,11 +684,47 @@ const submitAdvance = async () => {
   }
 };
 
+const startEditAdvance = (adv: WorkerAdvance) => {
+  editingAdvId.value = adv.id;
+  editAdv.value = {
+    amount: adv.amount,
+    date: adv.date,
+    notes: adv.notes || "",
+  };
+};
+
+const cancelEditAdvance = () => {
+  editingAdvId.value = null;
+  editAdv.value = { amount: 0, date: today(), notes: "" };
+};
+
+const saveEditAdvance = async () => {
+  if (editingAdvId.value == null) return;
+
+  advEditLoading.value = true;
+  try {
+    await api.workers.updateAdvance({
+      id: editingAdvId.value,
+      amount: editAdv.value.amount,
+      date: editAdv.value.date,
+      notes: editAdv.value.notes.trim() || null,
+    });
+    cancelEditAdvance();
+    // El modal de adelantos NO se cierra: solo refresca la lista.
+    await loadAdvances();
+  } catch (e: any) {
+    showError("Error al actualizar adelanto: " + (e.message || e));
+  } finally {
+    advEditLoading.value = false;
+  }
+};
+
 const deleteAdvance = async (id: number) => {
-  if (!confirm("¿Eliminar este adelanto?")) return;
+  if (!(await askConfirm({ message: '¿Eliminar este adelanto?', danger: true, confirmText: 'Eliminar' }))) return;
   advLoadingList.value = true;
   try {
     await api.workers.deleteAdvance(id);
+    // El modal de adelantos NO se cierra: solo refresca la lista.
     await loadAdvances();
   } catch (e: any) {
     showError("Error al eliminar: " + (e.message || e));
@@ -847,8 +927,8 @@ const submitForm = async () => {
       msg = 'Trabajador creado exitosamente.';
     }
 
-    // Si todo salió bien, cerramos e insistimos la recarga
-    closeModal();
+    // Éxito: cerramos directamente (closeModal() aborta si formLoading sigue en true).
+    isModalOpen.value = false;
     successGlobal.value = msg;
     setTimeout(() => successGlobal.value = '', 4000);
 
@@ -882,7 +962,14 @@ const toggleStatus = async (worker: Worker) => {
 
 // ================= ELIMINAR PERMANENTEMENTE (BORRADO FÍSICO) =================
 const promptHardDelete = async (worker: Worker) => {
-  if (!confirm(`¡ADVERTENCIA PÉRDIDA DE DATOS!\n¿Estás absolutamente seguro de eliminar permanentemente a ${worker.name}? Esto eliminará todo su historial de marcaje y NO se puede deshacer.`)) return;
+  const confirmed = await askConfirm({
+    title: 'Eliminar permanentemente',
+    message: `Vas a eliminar a ${worker.name} y TODO su historial de marcaje y adelantos.\nEsta acción NO se puede deshacer.`,
+    danger: true,
+    confirmText: 'Eliminar definitivamente',
+    requireText: 'ELIMINAR',
+  });
+  if (!confirmed) return;
 
   try {
     await api.workers.hardDelete(worker.id);

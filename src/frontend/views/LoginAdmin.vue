@@ -10,11 +10,7 @@
       <!-- Encabezado con Icono -->
       <template #header>
         <div class="w-full text-center pt-4">
-          <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4 ring-8 ring-primary/5">
-            <svg class="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-            </svg>
-          </div>
+          <img :src="logoUrl" alt="Náutica Botes Inflables" class="w-24 h-24 mx-auto mb-4 object-contain drop-shadow-md" />
           <h2 class="text-2xl font-extrabold text-text-base tracking-tight mb-1">
             Acceso Restringido
           </h2>
@@ -110,6 +106,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
 import { useAdminStore } from '../stores/adminStore'
+import logoUrl from '../assets/logo.png'
 import BaseCard from '../components/ui/BaseCard.vue'
 import BaseInput from '../components/ui/BaseInput.vue'
 import BaseButton from '../components/ui/BaseButton.vue'

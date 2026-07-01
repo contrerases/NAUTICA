@@ -66,6 +66,10 @@ export const api = {
       call<WorkerAdvance>(WorkerChannels.ADVANCE_ADD, dto),
     listAdvances: (workerId: number, month: string) =>
       call<WorkerAdvance[]>(WorkerChannels.ADVANCE_LIST, { workerId, month }),
+    advanceHistory: (workerId: number) =>
+      call<WorkerAdvance[]>(WorkerChannels.ADVANCE_HISTORY, workerId),
+    updateAdvance: (dto: { id: number; amount: number; date: string; notes?: string | null }) =>
+      call<WorkerAdvance>(WorkerChannels.ADVANCE_UPDATE, dto),
     deleteAdvance: (id: number) => call<boolean>(WorkerChannels.ADVANCE_DELETE, id),
   },
 
@@ -88,6 +92,7 @@ export const api = {
     get: () => call<ConfigView>(ConfigChannels.GET),
     update: (dto: UpdateConfigDto) => call<ConfigView>(ConfigChannels.UPDATE, dto),
     cancelPending: () => call<ConfigView>(ConfigChannels.CANCEL_PENDING),
+    backup: () => call<{ canceled: boolean; path?: string }>(ConfigChannels.BACKUP),
   },
 
   report: {

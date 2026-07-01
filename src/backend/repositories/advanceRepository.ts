@@ -18,8 +18,22 @@ export const advanceRepository = {
       .get(id) as WorkerAdvance | undefined;
   },
 
+  update(id: number, data: { amount: number; date: string; notes: string | null }): WorkerAdvance {
+    getDatabase()
+      .prepare('UPDATE worker_advances SET amount = @amount, date = @date, notes = @notes WHERE id = @id')
+      .run({ id, amount: data.amount, date: data.date, notes: data.notes });
+    return this.getById(id)!;
+  },
+
   delete(id: number): boolean {
     return getDatabase().prepare('DELETE FROM worker_advances WHERE id = ?').run(id).changes > 0;
+  },
+
+  /** Historial completo de un trabajador (todos los meses). */
+  getByWorker(workerId: number): WorkerAdvance[] {
+    return getDatabase()
+      .prepare('SELECT * FROM worker_advances WHERE worker_id = ? ORDER BY date DESC, created_at DESC')
+      .all(workerId) as WorkerAdvance[];
   },
 
   getByWorkerAndMonth(workerId: number, month: string): WorkerAdvance[] {

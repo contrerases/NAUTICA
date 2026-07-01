@@ -135,7 +135,7 @@
               </div>
             </div>
             <div>
-              <button @click="goToAnomalies" class="text-xs font-bold py-1 px-3 rounded-md bg-danger text-white hover:bg-danger-hover transition-all">
+              <button @click="goToAnomalies" class="text-xs font-bold py-1 px-3 rounded-md bg-danger text-white hover:bg-danger/90 transition-all">
                 REVISAR
               </button>
             </div>

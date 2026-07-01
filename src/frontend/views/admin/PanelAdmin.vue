@@ -6,11 +6,7 @@
       <!-- Branding / Logo -->
       <div class="h-20 flex items-center px-6 border-b border-surface-border">
         <div class="flex items-center gap-3">
-          <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-primary-hover text-white flex items-center justify-center shadow-lg shadow-primary/20">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
-            </svg>
-          </div>
+          <img :src="logoUrl" alt="Náutica Botes Inflables" class="w-16 h-16 object-contain shrink-0" />
           <div class="flex flex-col">
             <span class="font-extrabold tracking-tight text-lg text-text-base leading-tight uppercase relative">
               NÁUTICA
@@ -128,6 +124,7 @@ import { ref, computed, watchEffect, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAdminStore } from '../../stores/adminStore'
 import { Avatar } from '../../components/ui'
+import logoUrl from '../../assets/logo.png'
 
 const router = useRouter()
 const route = useRoute()

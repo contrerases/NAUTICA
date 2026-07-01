@@ -42,6 +42,7 @@ function createWindow() {
     show: false,
     autoHideMenuBar: true,
     title: 'Náutica Jornada',
+    icon: join(__dirname, '../../resources/icon.ico'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
       sandbox: false,

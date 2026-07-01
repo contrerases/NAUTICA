@@ -12,7 +12,7 @@ import type {
   CreateWorkerAdvanceDto,
 } from '../../shared/types/worker';
 import { formatRut, isValidRut } from '../../shared/utils/rut';
-import { today } from '../../shared/utils/date';
+import { today, monthOf, currentMonth } from '../../shared/utils/date';
 
 function normalizeRut(rut?: string | null): string | null {
   if (!rut) return null;
@@ -136,7 +136,30 @@ export const workerService = {
     return advanceRepository.getByWorkerAndMonth(workerId, month);
   },
 
+  /** Historial completo de adelantos de un trabajador (todos los meses). */
+  listAllAdvances(workerId: number): WorkerAdvance[] {
+    return advanceRepository.getByWorker(workerId);
+  },
+
+  /** Corrige un adelanto. Solo se permiten los del MES EN CURSO (meses pasados = solo lectura). */
+  updateAdvance(id: number, data: { amount: number; date: string; notes?: string | null }): WorkerAdvance {
+    const adv = advanceRepository.getById(id);
+    if (!adv) throw new Error('Adelanto no encontrado.');
+    if (monthOf(adv.date) !== currentMonth()) {
+      throw new Error('Solo se pueden editar adelantos del mes en curso.');
+    }
+    if (monthOf(data.date) !== currentMonth()) {
+      throw new Error('La fecha del adelanto debe pertenecer al mes en curso.');
+    }
+    return advanceRepository.update(id, { amount: data.amount, date: data.date, notes: data.notes ?? null });
+  },
+
   deleteAdvance(id: number): boolean {
+    const adv = advanceRepository.getById(id);
+    if (!adv) throw new Error('Adelanto no encontrado.');
+    if (monthOf(adv.date) !== currentMonth()) {
+      throw new Error('Solo se pueden eliminar adelantos del mes en curso.');
+    }
     return advanceRepository.delete(id);
   },
 };

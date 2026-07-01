@@ -70,6 +70,13 @@ export const advanceSchema = z.object({
   notes: z.string().nullish(),
 });
 
+export const advanceUpdateSchema = z.object({
+  id: z.number().int().positive(),
+  amount: z.number().int().positive('El monto debe ser mayor a cero.'),
+  date: ISO_DATE,
+  notes: z.string().nullish(),
+});
+
 // ── Auth ──────────────────────────────────────────────────
 export const loginSchema = z.object({
   username: z.string().min(1),

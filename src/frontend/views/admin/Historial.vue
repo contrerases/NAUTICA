@@ -173,7 +173,7 @@
           </div>
           
           <div class="flex items-center gap-2 mt-4 bg-surface-border p-3 rounded-lg">
-            <input type="checkbox" id="edit-colacion" v-model="editData.tomo_colacion" class="w-4 h-4 text-brand-primary bg-surface border-surface-border rounded focus:ring-brand-primary focus:ring-2">
+            <input type="checkbox" id="edit-colacion" v-model="editData.tomo_colacion" class="w-4 h-4 accent-primary bg-surface border-surface-border rounded focus:ring-primary focus:ring-2">
             <label for="edit-colacion" class="text-sm font-medium text-text-base cursor-pointer">
               Tomó su media hora de colación
             </label>
@@ -216,7 +216,7 @@
           </div>
           
           <div class="flex items-center gap-2 mt-4 bg-surface-border p-3 rounded-lg" v-if="createData.exit_time">
-            <input type="checkbox" id="create-colacion" v-model="createData.tomo_colacion" class="w-4 h-4 text-brand-primary bg-surface border-surface-border rounded focus:ring-brand-primary focus:ring-2">
+            <input type="checkbox" id="create-colacion" v-model="createData.tomo_colacion" class="w-4 h-4 accent-primary bg-surface border-surface-border rounded focus:ring-primary focus:ring-2">
             <label for="create-colacion" class="text-sm font-medium text-text-base cursor-pointer">
               Tomó su media hora de colación
             </label>
@@ -239,6 +239,7 @@ import { useRoute } from 'vue-router';
 import type { AttendanceRecord, Worker } from '@shared/types';
 import { formatDuration } from '@shared/utils/time';
 import { today, addDays } from '@shared/utils/date';
+import { askConfirm } from '../../composables/useConfirm';
 import { api } from '../../api';
 import { useAdminStore } from '../../stores/adminStore';
 
@@ -303,8 +304,10 @@ const filteredAttendances = computed(() => {
     if (filterStatus.value === 'ANOMALY') {
       // Consideramos anomalía si es un turno cerrado pero con horas irrazonables (>15h o <1h)
       result = result.filter(a => a.status === 'CLOSED' && a.worked_minutes !== null && ((Number(a.worked_minutes) / 60) < 1 || (Number(a.worked_minutes) / 60) > 15));
+    } else if (filterStatus.value === 'PENDING') {
+      // "Pendientes (Sin Salida)" = turnos abiertos de días anteriores (olvidó marcar salida)
+      result = result.filter(a => a.status === 'OPEN' && a.date < todayStr);
     } else {
-      // OPEN, CLOSED o PENDING
       result = result.filter(a => a.status === filterStatus.value);
     }
   }
@@ -391,7 +394,7 @@ const submitEdit = async () => {
 
   // Se permite corregir registros de cualquier mes; el backend guarda la traza
   // de auditoría (updated_by). Pedimos confirmación explícita antes de guardar.
-  if (!confirm('Vas a corregir un registro de asistencia. El cambio queda registrado con tu usuario. ¿Deseas continuar?')) {
+  if (!(await askConfirm({ title: 'Corregir registro', message: 'Vas a corregir un registro de asistencia. El cambio queda registrado con tu usuario. ¿Deseas continuar?', confirmText: 'Corregir' }))) {
     editLoading.value = false;
     return;
   }
@@ -405,9 +408,11 @@ const submitEdit = async () => {
       adminId: adminStore.admin?.id ?? undefined,
     });
 
+    // Éxito: cerrar el modal y mostrar el aviso de éxito. Si falla, el modal
+    // permanece abierto (ver catch) para poder reintentar.
+    closeEditModal();
     successGlobal.value = 'Registro actualizado correctamente';
     setTimeout(() => successGlobal.value = '', 3000);
-    closeEditModal();
     loadAttendances();
   } catch (e: any) {
     editError.value = e.message || 'Error al actualizar el registro';
@@ -462,7 +467,7 @@ const submitCreate = async () => {
 
   // El alta manual puede ser de cualquier mes/fecha; el backend guarda la traza.
   // Confirmamos porque es una intervención manual sobre el historial.
-  if (!confirm('Vas a crear un registro de asistencia manualmente. El cambio queda registrado con tu usuario. ¿Deseas continuar?')) {
+  if (!(await askConfirm({ title: 'Crear registro manual', message: 'Vas a crear un registro de asistencia manualmente. El cambio queda registrado con tu usuario. ¿Deseas continuar?', confirmText: 'Crear' }))) {
     createLoading.value = false;
     return;
   }
@@ -478,9 +483,11 @@ const submitCreate = async () => {
       adminId: adminStore.admin?.id ?? undefined,
     });
 
+    // Éxito: cerrar el modal y mostrar el aviso de éxito. Si falla, el modal
+    // permanece abierto (ver catch) para poder reintentar.
+    closeCreateModal();
     successGlobal.value = 'Registro agregado manualmente';
     setTimeout(() => successGlobal.value = '', 3000);
-    closeCreateModal();
     loadAttendances();
   } catch (e: any) {
     createError.value = e.message || 'Error al agregar el registro manual';

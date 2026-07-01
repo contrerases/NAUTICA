@@ -1,6 +1,6 @@
 /** Tipos de registros de asistencia (jornada). Dinero en enteros CLP. */
 
-export type AttendanceStatus = 'OPEN' | 'CLOSED' | 'PENDING';
+export type AttendanceStatus = 'OPEN' | 'CLOSED';
 
 export interface AttendanceRecord {
   id: number;

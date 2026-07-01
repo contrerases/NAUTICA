@@ -38,7 +38,7 @@
                 type="time"
                 label="Hora de Inicio Oficial"
                 required
-                :disabled="configStore.loading"
+                :disabled="!editing || configStore.loading"
                 hint="Hora base referencial a partir de la cual empezarán a contar los atrasos si se excede la tolerancia."
               />
             </div>
@@ -51,7 +51,7 @@
                 type="time"
                 label="Hora de Salida Oficial"
                 required
-                :disabled="configStore.loading"
+                :disabled="!editing || configStore.loading"
                 hint="Hora requerida para el cálculo unificado del total a pagar (jornada máxima)."
               />
             </div>
@@ -65,7 +65,7 @@
                 label="Tolerancia de Atraso (min.)"
                 required
                 min="0"
-                :disabled="configStore.loading"
+                :disabled="!editing || configStore.loading"
                 hint="Margen de gracia al entrar. Un minuto tarde descuenta 1 minuto exacto del pago total."
               />
             </div>
@@ -79,7 +79,7 @@
                 label="Tolerancia Marcaje Salida (min.)"
                 required
                 min="0"
-                :disabled="configStore.loading"
+                :disabled="!editing || configStore.loading"
                 hint="Minutos permitidos para marcar la salida antes de la hora real estipulada."
               />
             </div>
@@ -93,7 +93,7 @@
                 label="Minutos de Colación Oficial"
                 required
                 min="0"
-                :disabled="configStore.loading"
+                :disabled="!editing || configStore.loading"
                 hint="Duración del descanso de almuerzo a descontar del tiempo trabajado."
               />
             </div>
@@ -108,7 +108,7 @@
                 label="Horas de Jornada Base"
                 required
                 min="0"
-                :disabled="configStore.loading"
+                :disabled="!editing || configStore.loading"
                 hint="Usado para cálculos estándar. Con soporte para decimales, ejemplo: 8.5"
               />
             </div>
@@ -123,15 +123,15 @@
                 label="Multiplicador Global de Hora Extra (Ej: 1.5)"
                 required
                 min="1.0"
-                :disabled="configStore.loading"
+                :disabled="!editing || configStore.loading"
                 hint="Factor de recargo general para las horas extras. Ejemplo: 1.5 significa 50% de recargo sobre el valor base de la hora del trabajador."
               />
             </div>
 
           </div>
 
-          <!-- Aplicar desde -->
-          <div class="flex flex-col gap-3 pt-2">
+          <!-- Aplicar desde (solo cuando hay cambios en edición) -->
+          <div v-if="editing && isDirty" class="flex flex-col gap-3 pt-2">
             <span class="text-sm font-semibold text-text-base">Aplicar cambios desde</span>
             <div class="flex flex-col sm:flex-row gap-3">
               <label
@@ -142,7 +142,7 @@
                   type="radio"
                   value="tomorrow"
                   v-model="formData.applyFrom"
-                  :disabled="configStore.loading"
+                  :disabled="!editing || configStore.loading"
                   class="mt-1"
                 />
                 <span>
@@ -158,7 +158,7 @@
                   type="radio"
                   value="today"
                   v-model="formData.applyFrom"
-                  :disabled="configStore.loading"
+                  :disabled="!editing || configStore.loading"
                   class="mt-1"
                 />
                 <span>
@@ -180,12 +180,27 @@
             <p class="text-sm text-text-muted" v-if="configStore.current">
               Vigente desde: <span class="font-medium text-text-base">{{ configStore.current.effectiveFrom }}</span>
             </p>
-            <BaseButton type="submit" variant="primary" :is-loading="configStore.loading">
-              <template #icon>
-                <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            <div class="flex items-center gap-3">
+              <!-- Solo lectura → botón Editar -->
+              <BaseButton v-if="!editing" type="button" variant="secondary" @click="startEdit">
+                <template #icon>
+                  <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                </template>
+                Editar
+              </BaseButton>
+              <!-- En edición → Cancelar + Guardar (Guardar solo si hay cambios) -->
+              <template v-else>
+                <BaseButton type="button" variant="outline" @click="cancelEdit" :disabled="configStore.loading">
+                  Cancelar
+                </BaseButton>
+                <BaseButton v-if="isDirty" type="submit" variant="primary" :is-loading="configStore.loading">
+                  <template #icon>
+                    <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                  </template>
+                  Guardar
+                </BaseButton>
               </template>
-              Guardar Configuración
-            </BaseButton>
+            </div>
           </div>
         </form>
       </BaseCard>
@@ -231,6 +246,26 @@
           <p class="text-sm text-text-muted">
             Esto garantiza que si modificas el valor de hora de un trabajador o las horas base en un futuro, el **historial anterior no se verá afectado**, manteniendo la integridad de auditoría contable.
           </p>
+        </BaseCard>
+
+        <!-- Respaldo de la base de datos -->
+        <BaseCard>
+          <h3 class="text-lg font-bold text-text-base mb-2 flex items-center gap-2">
+            <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V7M4 7l2-3h12l2 3M4 7h16M9 12h6"></path></svg>
+            Respaldo de datos
+          </h3>
+          <p class="text-sm text-text-muted mb-4">
+            Guarda una copia de toda la base de datos (trabajadores, marcajes, adelantos y configuración) en el lugar que elijas.
+          </p>
+          <BaseAlert v-if="backupMsg" type="success" :message="backupMsg" class="mb-3" />
+          <div class="flex justify-end">
+            <BaseButton variant="secondary" :is-loading="backupLoading" @click="backupDb">
+              <template #icon>
+                <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+              </template>
+              Exportar respaldo
+            </BaseButton>
+          </div>
         </BaseCard>
 
         <!-- Cambio de Contraseña -->
@@ -295,7 +330,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useConfigStore } from '../../stores/configStore';
 import { useAdminStore } from '../../stores/adminStore';
 import { api } from '../../api';
@@ -317,21 +352,54 @@ const formData = ref({
   applyFrom: 'tomorrow' as 'today' | 'tomorrow'
 });
 
-// Sincronizar store state (config vigente hoy, camelCase) con el form local
-watch(() => configStore.config, (newConf) => {
-  if (newConf) {
-    formData.value = {
-      startHour: newConf.startHour,
-      exitHour: newConf.exitHour,
-      toleranceMinutes: newConf.toleranceMinutes,
-      exitToleranceMinutes: newConf.exitToleranceMinutes,
-      defaultBreakMinutes: newConf.defaultBreakMinutes,
-      baseDailyHours: newConf.baseDailyHours,
-      overtimeMultiplier: newConf.overtimeMultiplier,
-      applyFrom: 'tomorrow'
-    };
-  }
-}, { deep: true, immediate: true });
+// La config se muestra en solo lectura hasta pulsar "Editar".
+const editing = ref(false);
+
+function syncFromStore() {
+  const c = configStore.config;
+  if (!c) return;
+  formData.value = {
+    startHour: c.startHour,
+    exitHour: c.exitHour,
+    toleranceMinutes: c.toleranceMinutes,
+    exitToleranceMinutes: c.exitToleranceMinutes,
+    defaultBreakMinutes: c.defaultBreakMinutes,
+    baseDailyHours: c.baseDailyHours,
+    overtimeMultiplier: c.overtimeMultiplier,
+    applyFrom: 'tomorrow'
+  };
+}
+
+// Sincroniza el form con lo vigente, salvo mientras se edita (no pisar lo que se escribe).
+watch(() => configStore.config, () => { if (!editing.value) syncFromStore(); }, { deep: true, immediate: true });
+
+// "Sucio" = algún campo difiere de lo vigente. El selector "aplicar desde" y Guardar solo aparecen si hay cambios.
+const isDirty = computed(() => {
+  const c = configStore.config;
+  if (!c) return false;
+  const f = formData.value;
+  return (
+    f.startHour !== c.startHour ||
+    f.exitHour !== c.exitHour ||
+    Number(f.toleranceMinutes) !== c.toleranceMinutes ||
+    Number(f.exitToleranceMinutes) !== c.exitToleranceMinutes ||
+    Number(f.defaultBreakMinutes) !== c.defaultBreakMinutes ||
+    Number(f.baseDailyHours) !== c.baseDailyHours ||
+    Number(f.overtimeMultiplier) !== c.overtimeMultiplier
+  );
+});
+
+function startEdit() {
+  successMsg.value = '';
+  configStore.error = null;
+  syncFromStore();
+  editing.value = true;
+}
+
+function cancelEdit() {
+  syncFromStore();
+  editing.value = false;
+}
 
 const saveConfig = async () => {
   successMsg.value = '';
@@ -347,10 +415,30 @@ const saveConfig = async () => {
   });
 
   if (ok) {
+    editing.value = false;
     successMsg.value = formData.value.applyFrom === 'today'
       ? 'Configuración guardada. Los cambios aplican desde HOY y recalculan los marcajes registrados hoy.'
       : 'Configuración guardada. Los cambios entrarán en vigencia MAÑANA; los marcajes de hoy conservan su configuración actual.';
     setTimeout(() => successMsg.value = '', 6000);
+  }
+};
+
+// Respaldo de la base de datos
+const backupLoading = ref(false);
+const backupMsg = ref('');
+const backupDb = async () => {
+  backupLoading.value = true;
+  backupMsg.value = '';
+  try {
+    const r = await api.config.backup();
+    if (!r.canceled) {
+      backupMsg.value = `Respaldo guardado en: ${r.path}`;
+      setTimeout(() => (backupMsg.value = ''), 8000);
+    }
+  } catch (e: any) {
+    configStore.error = e?.message || 'No se pudo crear el respaldo.';
+  } finally {
+    backupLoading.value = false;
   }
 };
 

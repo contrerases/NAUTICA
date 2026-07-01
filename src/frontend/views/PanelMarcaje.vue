@@ -19,7 +19,10 @@
     </div>
 
     <div class="relative z-10 w-full max-w-4xl flex flex-col items-center">
-      
+
+      <!-- Logo -->
+      <img :src="logoUrl" alt="Náutica Botes Inflables" class="w-28 h-28 mb-6 object-contain drop-shadow-md select-none" />
+
       <!-- Reloj Digital en Vivo -->
       <div class="text-center mb-10 select-none">
         <h1 class="text-7xl md:text-9xl font-black text-text-base tracking-tighter tabular-nums drop-shadow-sm">
@@ -246,6 +249,7 @@ import BaseModal from '../components/ui/BaseModal.vue'
 import BaseAlert from '../components/ui/BaseAlert.vue'
 import { Avatar, SegmentedToggle } from '../components/ui'
 import { api } from '../api'
+import logoUrl from '../assets/logo.png'
 import type { Worker, AttendanceRecord } from '@shared/types'
 import { formatCLP } from '@shared/utils/money'
 import { formatDuration } from '@shared/utils/time'
@@ -497,7 +501,6 @@ const showSuccessFeedback = (msg: string, record?: AttendanceRecord) => {
 }
 
 const showErrorModal = (title: string, message: string) => {
-  errorModalTitle.value = title
   errorModalTitle.value = title
   errorModalMessage.value = message
   isErrorModalOpen.value = true

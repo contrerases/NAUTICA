@@ -25,14 +25,14 @@ export enum WorkerChannels {
   VALIDATE_RUT = 'worker:validate-rut',
   ADVANCE_ADD = 'worker:advance-add',
   ADVANCE_LIST = 'worker:advance-list',
-  ADVANCE_LIST_ALL = 'worker:advance-list-all',
+  ADVANCE_HISTORY = 'worker:advance-history',
+  ADVANCE_UPDATE = 'worker:advance-update',
   ADVANCE_DELETE = 'worker:advance-delete',
 }
 
 export enum AttendanceChannels {
   GET_ALL = 'attendance:get-all',
   GET_BY_WORKER = 'attendance:get-by-worker',
-  GET_BY_PERIOD = 'attendance:get-by-period',
   CHECK_TODAY = 'attendance:check-today',
   MARK_ENTRY = 'attendance:mark-entry',
   MARK_EXIT = 'attendance:mark-exit',
@@ -45,6 +45,7 @@ export enum ConfigChannels {
   GET = 'config:get', // devuelve ConfigView (current + pending)
   UPDATE = 'config:update',
   CANCEL_PENDING = 'config:cancel-pending',
+  BACKUP = 'config:backup', // exporta una copia de la base de datos
 }
 
 export enum ReportChannels {

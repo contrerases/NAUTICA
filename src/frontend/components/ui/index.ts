@@ -21,6 +21,7 @@ export { default as BaseTable } from './BaseTable.vue';
 export { default as Avatar } from './Avatar.vue';
 export { default as EmptyState } from './EmptyState.vue';
 export { default as IconButton } from './IconButton.vue';
+export { default as MoneyInput } from './MoneyInput.vue';
 export { default as PageHeader } from './PageHeader.vue';
 export { default as SegmentedToggle } from './SegmentedToggle.vue';
 export { default as StatCard } from './StatCard.vue';

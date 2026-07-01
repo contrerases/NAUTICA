@@ -24,9 +24,9 @@
           leave-from-class="opacity-100 translate-y-0 sm:scale-100"
           leave-to-class="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
         >
-          <div 
-            v-if="isOpen" 
-            class="relative bg-surface rounded-2xl shadow-2xl border border-surface-border w-full overflow-hidden flex flex-col"
+          <div
+            v-if="isOpen"
+            class="relative bg-surface rounded-2xl shadow-2xl border border-surface-border w-full overflow-hidden flex flex-col max-h-[90vh]"
             :class="[maxWidthClasses[maxWidth]]"
           >
             <!-- Header -->
@@ -57,8 +57,8 @@
               </button>
             </div>
 
-            <!-- Body -->
-            <div class="px-6 py-6 text-text-base">
+            <!-- Body (scrollea si el contenido excede el alto de la ventana) -->
+            <div class="px-6 py-6 text-text-base overflow-y-auto flex-1 min-h-0 scrollbar-thin">
               <slot></slot>
             </div>
 
@@ -78,7 +78,7 @@ const props = withDefaults(defineProps<{
   isOpen: boolean;
   title: string;
   type?: 'info' | 'warning' | 'error' | 'success';
-  maxWidth?: 'sm' | 'md' | 'lg' | 'xl';
+  maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
   showCloseButton?: boolean;
   closeOnBackdrop?: boolean;
 }>(), {
@@ -94,6 +94,9 @@ const maxWidthClasses = {
   sm: 'max-w-sm',
   md: 'max-w-md',
   lg: 'max-w-lg',
-  xl: 'max-w-xl'
+  xl: 'max-w-xl',
+  '2xl': 'max-w-2xl',
+  '3xl': 'max-w-3xl',
+  '4xl': 'max-w-4xl'
 };
 </script>

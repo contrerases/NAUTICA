@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS attendance_records (
   daily_payment    INTEGER DEFAULT NULL CHECK (daily_payment IS NULL OR daily_payment >= 0),
   delay_minutes    INTEGER NOT NULL DEFAULT 0 CHECK (delay_minutes >= 0),  -- informativo
 
-  status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'CLOSED', 'PENDING')),
+  status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'CLOSED')),
 
   -- Snapshots congelados al marcar entrada, según la fecha del turno
   hourly_rate_snap         INTEGER NOT NULL CHECK (hourly_rate_snap > 0),

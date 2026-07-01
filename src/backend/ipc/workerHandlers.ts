@@ -5,6 +5,7 @@ import {
   updateWorkerSchema,
   workerIdentitySchema,
   advanceSchema,
+  advanceUpdateSchema,
 } from '../../shared/validators';
 import { isValidRut } from '../../shared/utils/rut';
 import { workerService } from '../services/workerService';
@@ -101,6 +102,23 @@ export function registerWorkerHandlers(): void {
   ipcMain.handle(WorkerChannels.ADVANCE_LIST, (_e, payload: { workerId: number; month: string }) => {
     try {
       return ok(workerService.listAdvances(payload.workerId, payload.month));
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  ipcMain.handle(WorkerChannels.ADVANCE_HISTORY, (_e, workerId: number) => {
+    try {
+      return ok(workerService.listAllAdvances(workerId));
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  ipcMain.handle(WorkerChannels.ADVANCE_UPDATE, (_e, payload) => {
+    try {
+      const dto = advanceUpdateSchema.parse(payload);
+      return ok(workerService.updateAdvance(dto.id, { amount: dto.amount, date: dto.date, notes: dto.notes }));
     } catch (e) {
       return fail(e);
     }

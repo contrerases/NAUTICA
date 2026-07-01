@@ -97,6 +97,19 @@ check('Marta (solo adelanto) aparece en la liquidación', !!martaLiq, 'no aparec
 check('Marta: líquido negativo (deuda) -100.000', martaLiq?.net_payment === -100000 && martaLiq?.has_debt === true, `net=${martaLiq?.net_payment}`);
 check('Liquidación provisional (hay turnos abiertos)', payroll.provisional === true);
 
+console.log('\n== Adelantos: edición mes en curso vs pasado ==');
+const pedro = workerService.create({ name: 'Pedro', dni: 'PE1', hourly_rate: 5000, start_date: t });
+const advCur = workerService.addAdvance({ worker_id: pedro.id, amount: 20000, date: t });
+const advOld = workerService.addAdvance({ worker_id: pedro.id, amount: 30000, date: '2020-01-15' });
+const advUpd = workerService.updateAdvance(advCur.id, { amount: 25000, date: t });
+check('Editar adelanto del mes en curso: monto actualizado', advUpd.amount === 25000, `amount=${advUpd.amount}`);
+try { workerService.updateAdvance(advOld.id, { amount: 1, date: '2020-01-15' }); failed++; console.log('  ✗ Editar adelanto de mes pasado (no lanzó)'); }
+catch { passed++; console.log('  ✓ Editar adelanto de mes pasado bloqueado'); }
+try { workerService.deleteAdvance(advOld.id); failed++; console.log('  ✗ Eliminar adelanto de mes pasado (no lanzó)'); }
+catch { passed++; console.log('  ✓ Eliminar adelanto de mes pasado bloqueado'); }
+check('Historial completo lista ambos adelantos', workerService.listAllAdvances(pedro.id).length === 2);
+workerService.hardDelete(pedro.id); // limpieza (borra sus adelantos)
+
 console.log('\n== Baja lógica vs borrado físico ==');
 workerService.deactivate(juan.id, adminId);
 check('Desactivar: status INACTIVE', workerService.getById(juan.id)?.status === 'INACTIVE');

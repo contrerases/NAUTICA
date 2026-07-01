@@ -1,26 +1,31 @@
 import { getDatabase } from '../database/connection'
 
+export interface UserRow {
+  id: number
+  username: string
+  passwordHash: string
+  createdAt: string
+}
+
 export class UserRepository {
-  static findByUsername(username: string): any {
+  static findByUsername(username: string): UserRow | null {
     const db = getDatabase()
-    const stmt = db.prepare('SELECT id, username, password_hash, created_at FROM users WHERE username = ?')
-    const row = stmt.get(username) as any
-    
-    if (row) {
-      return {
-        id: row.id,
-        username: row.username,
-        passwordHash: row.password_hash,
-        createdAt: row.created_at
-      }
+    const row = db
+      .prepare('SELECT id, username, password_hash, created_at FROM users WHERE username = ?')
+      .get(username) as { id: number; username: string; password_hash: string; created_at: string } | undefined
+
+    if (!row) return null
+    return {
+      id: row.id,
+      username: row.username,
+      passwordHash: row.password_hash,
+      createdAt: row.created_at,
     }
-    return null
   }
 
   static countUsers(): number {
     const db = getDatabase()
-    const stmt = db.prepare('SELECT COUNT(*) as count FROM users')
-    const result = stmt.get() as any
+    const result = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }
     return result.count
   }
 

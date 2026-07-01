@@ -11,6 +11,7 @@
     
     --color-surface: 255 255 255;      /* #ffffff */
     --color-surface-muted: 248 250 252;/* #f8fafc */
+    --color-surface-hover: 241 245 249;/* slate-100 */
     --color-border: 226 232 240;       /* slate-200 */
     
     --color-text-base: 30 41 59;       /* slate-800 */
@@ -31,6 +32,7 @@
     
     --color-surface: 30 41 59;         /* slate-800 */
     --color-surface-muted: 15 23 42;   /* slate-900 */
+    --color-surface-hover: 51 65 85;   /* slate-700 */
     --color-border: 51 65 85;          /* slate-700 */
     
     --color-text-base: 248 250 252;    /* slate-50 -> MUCHO MÁS CLARO para alto contraste en oscuros */
@@ -55,6 +57,46 @@ body {
   @apply font-sans antialiased transition-colors duration-300;
   @apply bg-body text-text-base;
   overflow: hidden;
+}
+
+/* =========================================================
+   Barra de desplazamiento personalizada (Chromium / Electron)
+   Delgada, redondeada y acorde al tema. El color usa las
+   variables CSS, por lo que se adapta solo a claro/oscuro.
+   ========================================================= */
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgb(var(--color-border));
+  border-radius: 9999px;
+  /* Borde transparente + clip = "padding" que adelgaza el thumb y deja puntas redondas */
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--color-text-muted));
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Variante fina para barras laterales, tablas y listas (.scrollbar-thin) */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  border-width: 2px;
 }
 
 

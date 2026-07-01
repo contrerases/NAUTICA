@@ -1,12 +1,11 @@
 <template>
   <div class="flex flex-col space-y-6 h-full">
     <!-- Encabezado -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div>
-        <h2 class="text-3xl font-extrabold text-text-base">Gestión de Trabajadores</h2>
-        <p class="text-text-muted mt-1">Administra el personal, sus identidades y el valor de hora.</p>
-      </div>
-      <div class="flex items-center gap-3">
+    <PageHeader
+      title="Gestión de Trabajadores"
+      subtitle="Administra el personal, sus identidades y el valor de hora."
+    >
+      <template #actions>
         <BaseButton @click="openCreateModal" variant="primary">
           <template #icon>
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -17,8 +16,8 @@
           </template>
           Nuevo Trabajador
         </BaseButton>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <!-- Barra de Filtros Avanzados -->
     <BaseCard padding="base" class="bg-surface-muted border-none w-full">
@@ -55,16 +54,12 @@
           class="w-full sm:w-40 flex-shrink-0"
         />
 
-        <div class="w-full sm:w-auto min-w-[200px] flex-shrink-0 space-y-1">
-          <label class="block text-sm font-semibold text-text-base ml-1">Estado</label>
-          <select
-            v-model="statusFilter"
-            class="w-full h-[42px] block border border-surface-border rounded-lg bg-surface text-text-base text-sm shadow-sm transition-all outline-none px-4 focus:border-primary focus:ring-2 focus:ring-primary/20"
-          >
+        <div class="w-full sm:w-auto min-w-[200px] flex-shrink-0">
+          <BaseSelect v-model="statusFilter" label="Estado">
             <option value="ALL">Todos los Estados</option>
             <option value="ACTIVE">Activos</option>
             <option value="INACTIVE">Inactivos</option>
-          </select>
+          </BaseSelect>
         </div>
       </div>
     </BaseCard>
@@ -98,10 +93,7 @@
         <!-- Col Nombre -->
         <template #cell-name="{ row }">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 text-primary flex items-center justify-center font-bold overflow-hidden shrink-0">
-               <img v-if="row.photo" :src="row.photo" class="w-full h-full object-cover"/>
-               <span v-else>{{ row.name.charAt(0).toUpperCase() }}</span>
-            </div>
+            <Avatar :name="row.name" :photo="row.photo" size="md" color="primary" />
             <div>
               <div class="font-bold text-text-base">{{ row.name }}</div>
               <div class="text-xs text-text-muted">Creado: {{ formatDate(row.created_at) }}</div>
@@ -124,7 +116,7 @@
 
         <!-- Col Valor Hora -->
         <template #cell-hourly_rate="{ row }">
-          <span class="font-mono font-medium text-emerald-500">${{ row.hourly_rate.toLocaleString('es-CL') }}</span>
+          <span class="font-mono font-medium text-emerald-500">{{ formatCLP(row.hourly_rate) }}</span>
 
 
         </template>
@@ -132,8 +124,8 @@
         <!-- Col Valor Hora Extra -->
         <template #cell-overtime="{ row }">
           <div class="flex flex-col">
-            <span class="font-mono font-bold text-amber-500">${{ (row.hourly_rate * (configStore.config?.overtime_multiplier || 1.5)).toLocaleString('es-CL') }}</span>
-            <span class="text-[10px] text-text-muted mt-0.5">x{{ configStore.config?.overtime_multiplier || 1.5 }}</span>
+            <span class="font-mono font-bold text-amber-500">{{ formatCLP(row.hourly_rate * overtimeMultiplier) }}</span>
+            <span class="text-[10px] text-text-muted mt-0.5">x{{ overtimeMultiplier }}</span>
           </div>
 
 
@@ -159,67 +151,67 @@
         <template #cell-actions="{ row }">
           <div class="flex items-center gap-2 justify-end">
             <!-- Botón Adelantos -->
-            <button
-              @click="openAdvances(row)"
-              class="p-2 text-text-muted hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-colors border-none"
+            <IconButton
+              color="warning"
               title="Gestionar Adelantos de Dinero"
+              @click="openAdvances(row)"
             >
              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            </button>
+            </IconButton>
 
             <!-- Botón Ver Detalles -->
-            <button 
-              @click="openDetailsModal(row)" 
-              class="p-2 text-text-muted hover:text-sky-500 hover:bg-sky-500/10 rounded-lg transition-colors border-none"
+            <IconButton
+              color="primary"
               title="Resumen General"
+              @click="openDetailsModal(row)"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
               </svg>
-            </button>
+            </IconButton>
 
             <!-- Botón Editar -->
-            <button 
-              @click="openEditModal(row)" 
-              class="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-colors border-none"
+            <IconButton
+              color="primary"
               title="Editar"
+              @click="openEditModal(row)"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
               </svg>
-            </button>
+            </IconButton>
 
             <!-- Botón Cambiar Estado (Soft Delete / Reactivate) -->
-            <button 
+            <IconButton
               v-if="row.status === 'ACTIVE'"
-              @click="toggleStatus(row)" 
-              class="p-2 text-text-muted hover:text-warning hover:bg-warning/10 rounded-lg transition-colors border-none"
+              color="warning"
               title="Desactivar Temporalmente"
+              @click="toggleStatus(row)"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path>
               </svg>
-            </button>
-            <button 
+            </IconButton>
+            <IconButton
               v-else
-              @click="toggleStatus(row)" 
-              class="p-2 text-text-muted hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg transition-colors border-none"
+              color="success"
               title="Activar"
+              @click="toggleStatus(row)"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
               </svg>
-            </button>
+            </IconButton>
 
             <!-- Botón Eliminar Permanente (Hard Delete) -->
-            <button 
-              @click="promptHardDelete(row)" 
-              class="p-2 text-text-muted hover:text-danger hover:bg-danger/10 rounded-lg transition-colors border-none"
+            <IconButton
+              color="danger"
               title="Eliminar Permanentemente (Purgar)"
+              @click="promptHardDelete(row)"
             >
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-            </button>
+            </IconButton>
           </div>
 
 
@@ -259,26 +251,14 @@
             <!-- Tipo de Documento (UI Falsa para manejar la lógica internamente) -->
             <div class="space-y-1">
               <label class="block text-sm font-semibold text-text-base ml-1">Tipo de Documento</label>
-              <div class="h-11 flex border border-surface-border rounded-lg overflow-hidden bg-body p-1">
-                <button
-                  type="button"
-                  class="flex-1 text-sm font-bold rounded-md transition-all border-none outline-none"
-                  :class="docType === 'RUT' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text-base hover:bg-surface-hover'"
-                  @click="docType = 'RUT'"
-                  :disabled="formLoading"
-                >
-                  RUT (Chile)
-                </button>
-                <button
-                  type="button"
-                  class="flex-1 text-sm font-bold rounded-md transition-all border-none outline-none"
-                  :class="docType === 'DNI' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text-base hover:bg-surface-hover'"
-                  @click="docType = 'DNI'"
-                  :disabled="formLoading"
-                >
-                  DNI (Ext.)
-                </button>
-              </div>
+              <SegmentedToggle
+                v-model="docType"
+                :disabled="formLoading"
+                :options="[
+                  { value: 'RUT', label: 'RUT (Chile)' },
+                  { value: 'DNI', label: 'DNI (Ext.)' },
+                ]"
+              />
             </div>
 
             <!-- Input Documento -->
@@ -374,10 +354,7 @@
     >
       <div class="p-6" v-if="selectedWorkerDetails">
         <div class="flex items-center gap-4 mb-6">
-          <div class="w-14 h-14 rounded-full bg-primary/20 border-2 border-primary/20 text-primary flex items-center justify-center text-2xl font-bold overflow-hidden shrink-0">
-            <img v-if="selectedWorkerDetails.photo" :src="selectedWorkerDetails.photo" class="w-full h-full object-cover"/>
-            <span v-else>{{ selectedWorkerDetails.name.charAt(0).toUpperCase() }}</span>
-          </div>
+          <Avatar :name="selectedWorkerDetails.name" :photo="selectedWorkerDetails.photo" size="lg" color="primary" />
           <div>
             <h3 class="text-xl font-bold text-text-base">{{ selectedWorkerDetails.name }}</h3>
             <BaseBadge :variant="selectedWorkerDetails.status === 'ACTIVE' ? 'success' : 'danger'" class="mt-1">
@@ -394,7 +371,7 @@
             </div>
             <div>
               <p class="text-xs text-text-muted font-semibold uppercase tracking-wider">Valor Hora</p>
-              <p class="font-mono text-emerald-500 font-medium mt-1 text-sm">${{ selectedWorkerDetails.hourly_rate.toLocaleString('es-CL') }} / hr</p>
+              <p class="font-mono text-emerald-500 font-medium mt-1 text-sm">{{ formatCLP(selectedWorkerDetails.hourly_rate) }} / hr</p>
             </div>
             <div class="col-span-2">
               <p class="text-xs text-text-muted font-semibold uppercase tracking-wider">Fecha Ingreso</p>
@@ -483,14 +460,14 @@
         <div class="mt-4 pt-4 border-t border-surface-border/50">
           <h4 class="text-sm font-bold text-text-base mb-3 flex items-center justify-between">
             <span>Historial (Mes Actual)</span>
-            <span class="text-xs font-normal text-text-muted">Total: ${{ totalAdvancesMoth.toLocaleString("es-CL") }}</span>
+            <span class="text-xs font-normal text-text-muted">Total: {{ formatCLP(totalAdvancesMoth) }}</span>
           </h4>
           <div v-if="advLoadingList" class="text-center py-4 text-text-muted text-sm animate-pulse">Cargando historial...</div>
           <div v-else-if="advances.length === 0" class="text-center py-4 text-text-muted text-sm italic">Sin adelantos este mes.</div>
           <ul v-else class="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
             <li v-for="adv in advances" :key="adv.id" class="flex justify-between items-center bg-surface-base border border-surface-border p-3 rounded-lg shadow-sm">
               <div>
-                <strong class="text-emerald-500 font-mono">${{ adv.amount.toLocaleString("es-CL") }}</strong>
+                <strong class="text-emerald-500 font-mono">{{ formatCLP(adv.amount) }}</strong>
                 <p class="text-xs text-text-muted mt-0.5">{{ formatDate(adv.date) }} <span v-if="adv.notes" class="italic">- {{ adv.notes }}</span></p>
               </div>
               <button @click="deleteAdvance(adv.id)" class="text-danger hover:bg-danger/10 p-2 rounded-lg transition-colors border-none" title="Eliminar este adelanto">
@@ -509,16 +486,27 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { WorkerChannels } from '../../../shared/types/ipc';
-import type { Worker, WorkerStatus } from '../../../shared/types/worker';
+import type { Worker, WorkerAdvance, CreateWorkerDto, UpdateWorkerDto } from '@shared/types';
+import { formatCLP } from '@shared/utils/money';
+import { isValidRut } from '@shared/utils/rut';
+import { today, currentMonth } from '@shared/utils/date';
+import { api } from '../../api';
 import { useConfigStore } from '../../stores/configStore';
-import BaseCard from '../../components/ui/BaseCard.vue';
-import BaseTable from '../../components/ui/BaseTable.vue';
-import BaseButton from '../../components/ui/BaseButton.vue';
-import BaseBadge from '../../components/ui/BaseBadge.vue';
-import BaseInput from '../../components/ui/BaseInput.vue';
-import BaseModal from '../../components/ui/BaseModal.vue';
-import BaseAlert from '../../components/ui/BaseAlert.vue';
+import { useAdminStore } from '../../stores/adminStore';
+import {
+  BaseCard,
+  BaseTable,
+  BaseButton,
+  BaseBadge,
+  BaseInput,
+  BaseModal,
+  BaseAlert,
+  BaseSelect,
+  PageHeader,
+  Avatar,
+  IconButton,
+  SegmentedToggle,
+} from '../../components/ui';
 
 // ================= ESTADO DE LA VISTA =================
 const workers = ref<Worker[]>([]);
@@ -532,6 +520,11 @@ const filterDateTo = ref('');
 
 // ================= DEFINICIÓN DE TABLA =================
 const configStore = useConfigStore();
+const adminStore = useAdminStore();
+
+/** Multiplicador de hora extra vigente (config en camelCase). */
+const overtimeMultiplier = computed(() => configStore.config?.overtimeMultiplier ?? 1.5);
+
 const tableColumns = [
   { key: 'name', label: 'Nombre Completo' },
   { key: 'document', label: 'Documento' },
@@ -577,8 +570,7 @@ const loadWorkers = async () => {
   loading.value = true;
   errorGlobal.value = '';
   try {
-    const data = await window.electron.invoke(WorkerChannels.GET_ALL);
-    workers.value = data || [];
+    workers.value = await api.workers.getAll();
   } catch (err: any) {
     console.error('Error cargando trabajadores:', err);
     errorGlobal.value = err.message || 'Error al conectar con la base de datos.';
@@ -597,8 +589,8 @@ onMounted(async () => {
 // ================= ADELANTOS LÓGICA =================
 const isAdvModalOpen = ref(false);
 const selectedWorkerForAdv = ref<Worker | null>(null);
-const newAdv = ref({ amount: 0, date: new Date().toLocaleDateString("sv-SE", {timeZone: "America/Santiago"}), notes: "" });
-const advances = ref<any[]>([]);
+const newAdv = ref({ amount: 0, date: today(), notes: "" });
+const advances = ref<WorkerAdvance[]>([]);
 const advLoading = ref(false);
 const advLoadingList = ref(false);
 const totalAdvancesMoth = computed(() => advances.value.reduce((acc, curr) => acc + curr.amount, 0));
@@ -606,7 +598,7 @@ const totalAdvancesMoth = computed(() => advances.value.reduce((acc, curr) => ac
 const openAdvances = async (w: Worker) => {
   selectedWorkerForAdv.value = w;
   isAdvModalOpen.value = true;
-  newAdv.value = { amount: 0, date: new Date().toLocaleDateString("sv-SE", {timeZone: "America/Santiago"}), notes: "" };
+  newAdv.value = { amount: 0, date: today(), notes: "" };
   await loadAdvances();
 };
 
@@ -620,15 +612,9 @@ const loadAdvances = async () => {
   if (!selectedWorkerForAdv.value) return;
   advLoadingList.value = true;
   try {
-    const d = new Date();
-    const result = await window.electron.invoke(WorkerChannels.ADVANCE_LIST, { workerId: selectedWorkerForAdv.value.id, year: d.getFullYear(), month: d.getMonth() + 1 });
-    if (result.ok) {
-      advances.value = result.data || [];
-    } else {
-      showError("Error al cargar adelantos: " + result.error);
-    }
+    advances.value = await api.workers.listAdvances(selectedWorkerForAdv.value.id, currentMonth());
   } catch (e: any) {
-    showError("Error crítico al cargar adelantos: " + e.message);
+    showError("Error al cargar adelantos: " + (e.message || e));
   } finally {
     advLoadingList.value = false;
   }
@@ -636,23 +622,19 @@ const loadAdvances = async () => {
 
 const submitAdvance = async () => {
   if (!selectedWorkerForAdv.value) return;
-  
+
   advLoading.value = true;
   try {
-    const result = await window.electron.invoke(WorkerChannels.ADVANCE_ADD, {
+    await api.workers.addAdvance({
       worker_id: selectedWorkerForAdv.value.id,
       amount: newAdv.value.amount,
       date: newAdv.value.date,
-      notes: newAdv.value.notes.trim() || null
+      notes: newAdv.value.notes.trim() || null,
     });
-    if (result.ok) {
-      newAdv.value = { amount: 0, date: new Date().toLocaleDateString("sv-SE", {timeZone: "America/Santiago"}), notes: "" };
-      await loadAdvances();
-    } else {
-      showError("Error al guardar adelanto: " + result.error);
-    }
+    newAdv.value = { amount: 0, date: today(), notes: "" };
+    await loadAdvances();
   } catch (e: any) {
-    showError("Error guardando adelanto: " + e.message);
+    showError("Error al guardar adelanto: " + (e.message || e));
   } finally {
     advLoading.value = false;
   }
@@ -662,14 +644,10 @@ const deleteAdvance = async (id: number) => {
   if (!confirm("¿Eliminar este adelanto?")) return;
   advLoadingList.value = true;
   try {
-    const result = await window.electron.invoke(WorkerChannels.ADVANCE_DELETE, id);
-    if (result.ok) {
-      await loadAdvances();
-    } else {
-      showError("Error al eliminar: " + result.error);
-    }
+    await api.workers.deleteAdvance(id);
+    await loadAdvances();
   } catch (e: any) {
-    showError(e.message);
+    showError("Error al eliminar: " + (e.message || e));
   } finally {
     advLoadingList.value = false;
   }
@@ -719,7 +697,7 @@ const initialFormState = {
   id: 0,
   name: '',
   hourly_rate: 0,
-  start_date: new Date().toLocaleDateString('sv-SE', {timeZone: 'America/Santiago'}),
+  start_date: today(),
   photo: null as string | null
 };
 const formData = ref({ ...initialFormState });
@@ -783,7 +761,7 @@ const openEditModal = (worker: Worker) => {
     id: worker.id,
     name: worker.name,
     hourly_rate: worker.hourly_rate,
-    start_date: worker.start_date || new Date().toLocaleDateString('sv-SE', {timeZone: 'America/Santiago'}),
+    start_date: worker.start_date || today(),
     photo: worker.photo || null
   };
   
@@ -808,24 +786,11 @@ const isErrorModalOpen = ref(false);
 const errorModalMessage = ref('');
 
 const showError = (err: any) => {
-  let message = err.message || 'Ocurrió un error inesperado al procesar la solicitud.';
-  
-  // Limpiar el ruido del IPC de Electron
-  message = message.replace(/Error invoking remote method '.*?': Error: /, '');
-  
-  // Casos comunes de Base de Datos
-  if (message.includes('CHECK constraint failed: hourly_rate > 0')) {
-    message = 'El valor por hora debe ser mayor a 0.';
-  } else if (message.includes('CHECK constraint failed: hourly_rate >= 0')) {
-    message = 'El valor por hora no puede ser negativo.';
-  } else if (message.includes('UNIQUE constraint failed: workers.rut')) {
-    message = 'El RUT ingresado ya está registrado en el sistema.';
-  } else if (message.includes('UNIQUE constraint failed: workers.dni')) {
-    message = 'El DNI o Documento ingresado ya está registrado en el sistema.';
-  } else if (message.includes('NOT NULL constraint')) {
-    message = 'Faltan campos obligatorios que debe completar.';
-  }
-  
+  // El cliente `api` ya lanza un Error con el mensaje limpio del backend.
+  const message =
+    (typeof err === 'string' ? err : err?.message) ||
+    'Ocurrió un error inesperado al procesar la solicitud.';
+
   errorModalMessage.value = message;
   isErrorModalOpen.value = true;
 };
@@ -843,46 +808,50 @@ const submitForm = async () => {
     return;
   }
 
-  // Validar RUT antes de enviar
-  if (docType.value === 'RUT') {
-    const rutRegex = /^[0-9]{1,2}(\.[0-9]{3})*-[0-9K]$/;
-    if (!rutRegex.test(documentValue.value.trim())) {
-      formError.value = 'Formato de RUT inválido. Ingresa números y guión (Ej: 12.345.678-9)';
-      return;
-    }
+  // Validar RUT (formato + dígito verificador) antes de enviar
+  if (docType.value === 'RUT' && !isValidRut(documentValue.value)) {
+    formError.value = 'RUT inválido. Verifica el número y el dígito verificador (Ej: 12.345.678-9)';
+    return;
   }
 
   // Preparamos los datos quitando los puntos del RUT
   const cleanRutValue = docType.value === 'RUT' ? documentValue.value.replace(/\./g, '').trim() : null;
 
-  const payload = {
-    name: formData.value.name.trim(),
-    hourly_rate: Number(formData.value.hourly_rate),
-    start_date: formData.value.start_date,
-    rut: cleanRutValue,
-    dni: docType.value === 'DNI' ? documentValue.value.trim() : null,
-    photo: formData.value.photo
-  };
+  const adminId = adminStore.admin?.id ?? undefined;
+  const hourlyRate = Number(formData.value.hourly_rate);
 
   formLoading.value = true;
   try {
     let msg = '';
     if (isEditing.value) {
-      await window.electron.invoke(WorkerChannels.UPDATE, {
-        id: formData.value.id,
-        data: payload
-      });
+      const data: UpdateWorkerDto = {
+        name: formData.value.name.trim(),
+        hourly_rate: hourlyRate,
+        start_date: formData.value.start_date,
+        rut: cleanRutValue,
+        dni: docType.value === 'DNI' ? documentValue.value.trim() : null,
+        photo: formData.value.photo,
+      };
+      await api.workers.update(formData.value.id, data, adminId);
       msg = 'Trabajador actualizado exitosamente.';
     } else {
-      await window.electron.invoke(WorkerChannels.CREATE, payload);
+      const data: CreateWorkerDto = {
+        name: formData.value.name.trim(),
+        hourly_rate: hourlyRate,
+        start_date: formData.value.start_date,
+        rut: cleanRutValue,
+        dni: docType.value === 'DNI' ? documentValue.value.trim() : null,
+        photo: formData.value.photo,
+      };
+      await api.workers.create(data);
       msg = 'Trabajador creado exitosamente.';
     }
-    
+
     // Si todo salió bien, cerramos e insistimos la recarga
     closeModal();
     successGlobal.value = msg;
     setTimeout(() => successGlobal.value = '', 4000);
-    
+
     loadWorkers();
   } catch (err: any) {
     showError(err);
@@ -891,32 +860,32 @@ const submitForm = async () => {
   }
 };
 
-// ================= ELIMINAR / RESTAURAR =================
+// ================= DESACTIVAR / REACTIVAR (BAJA LÓGICA) =================
 const toggleStatus = async (worker: Worker) => {
-  const newStatus: WorkerStatus = worker.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
-  
-  // Opcional: Podríamos agregar un confirm() nativo de navegador o SweetAlert
-  // if (!confirm(`¿Estás seguro de ${newStatus === 'INACTIVE' ? 'desactivar' : 'activar'} a ${worker.name}?`)) return;
+  const adminId = adminStore.admin?.id ?? undefined;
+  const willDeactivate = worker.status === 'ACTIVE';
 
   try {
-    await window.electron.invoke(WorkerChannels.DELETE, { 
-      id: worker.id, 
-      status: newStatus 
-    });
-    // Actualizamos localmente para más velocidad (optimistic update)
-    worker.status = newStatus;
-    successGlobal.value = newStatus === 'ACTIVE' ? 'Trabajador reactivado con éxito.' : 'Trabajador desactivado con éxito.';
+    const updated = willDeactivate
+      ? await api.workers.deactivate(worker.id, adminId)
+      : await api.workers.reactivate(worker.id, adminId);
+    // Reflejamos el estado devuelto por el backend
+    worker.status = updated.status;
+    successGlobal.value = willDeactivate
+      ? 'Trabajador desactivado con éxito.'
+      : 'Trabajador reactivado con éxito.';
     setTimeout(() => successGlobal.value = '', 4000);
   } catch (err: any) {
     errorGlobal.value = err.message || 'Error cambiando el estado del trabajador.';
   }
 };
 
+// ================= ELIMINAR PERMANENTEMENTE (BORRADO FÍSICO) =================
 const promptHardDelete = async (worker: Worker) => {
   if (!confirm(`¡ADVERTENCIA PÉRDIDA DE DATOS!\n¿Estás absolutamente seguro de eliminar permanentemente a ${worker.name}? Esto eliminará todo su historial de marcaje y NO se puede deshacer.`)) return;
 
   try {
-    await window.electron.invoke(WorkerChannels.HARD_DELETE, worker.id);
+    await api.workers.hardDelete(worker.id);
     successGlobal.value = 'Trabajador eliminado permanentemente de la base de datos.';
     setTimeout(() => successGlobal.value = '', 4000);
     loadWorkers(); // Re-fetch the layout completely

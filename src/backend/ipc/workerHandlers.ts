@@ -1,98 +1,116 @@
 import { ipcMain } from 'electron';
-import { workerRepository } from '../repositories/workerRepository';
-import { advanceRepository } from '../repositories/advanceRepository';
 import { WorkerChannels } from '../../shared/types/ipc';
-import { workerIdentitySchema } from '../../shared/validators';
-import type { CreateWorkerDto, UpdateWorkerDto, WorkerIdentityDto, CreateWorkerAdvanceDto } from '../../shared/types/worker';
+import {
+  createWorkerSchema,
+  updateWorkerSchema,
+  workerIdentitySchema,
+  advanceSchema,
+} from '../../shared/validators';
+import { isValidRut } from '../../shared/utils/rut';
+import { workerService } from '../services/workerService';
+import { ok, fail } from './helpers';
 
-export function setupWorkerHandlers() {
-  ipcMain.handle(WorkerChannels.ADVANCE_ADD, (_, data: CreateWorkerAdvanceDto) => {
-    try {
-      const result = advanceRepository.createAdvance(data);
-      return { ok: true, data: result };
-    } catch (error: any) {
-      return { ok: false, error: error.message };
-    }
-  });
-
-  ipcMain.handle(WorkerChannels.ADVANCE_LIST, (_, { workerId, year, month }: { workerId: number, year: number, month: number }) => {
-    try {
-      const result = advanceRepository.getAdvancesByWorkerAndMonth(workerId, year, month);
-      return { ok: true, data: result };
-    } catch (error: any) {
-      return { ok: false, error: error.message };
-    }
-  });
-
-  ipcMain.handle(WorkerChannels.ADVANCE_LIST_ALL, (_, { year, month }: { year: number, month: number }) => {
-    try {
-      const result = advanceRepository.getAdvancesByMonth(year, month);
-      return { ok: true, data: result };
-    } catch (error: any) {
-      return { ok: false, error: error.message };
-    }
-  });
-
-  ipcMain.handle(WorkerChannels.ADVANCE_DELETE, (_, id: number) => {
-    try {
-      const result = advanceRepository.deleteAdvance(id);
-      return { ok: !!result };
-    } catch (error: any) {
-      return { ok: false, error: error.message };
-    }
-  });
+export function registerWorkerHandlers(): void {
   ipcMain.handle(WorkerChannels.GET_ALL, () => {
-    return workerRepository.getAll();
+    try {
+      return ok(workerService.getAll());
+    } catch (e) {
+      return fail(e);
+    }
   });
 
   ipcMain.handle(WorkerChannels.GET_ACTIVE, () => {
-    return workerRepository.getActive();
-  });
-
-  ipcMain.handle(WorkerChannels.GET_BY_ID, (_, id: number) => {
-    return workerRepository.findById(id);
-  });
-
-  ipcMain.handle(WorkerChannels.IDENTIFY, (_, identity: WorkerIdentityDto) => {
     try {
-      const parsedIdentity = workerIdentitySchema.parse(identity);
-      const worker = workerRepository.findByIdentity(parsedIdentity);
-      if (worker) {
-        return { found: true, worker };
-      }
-      return { found: false };
-    } catch (error: any) {
-      console.error('Error buscando trabajador por identidad:', error);
-      throw new Error(error.issues ? error.issues[0].message : error.message);
+      return ok(workerService.getActive());
+    } catch (e) {
+      return fail(e);
     }
   });
 
-  ipcMain.handle(WorkerChannels.CREATE, (_, data: CreateWorkerDto) => {
+  ipcMain.handle(WorkerChannels.GET_BY_ID, (_e, id: number) => {
     try {
-      // Falta validación Zod completa para CreateWorkerDto aquí, la agregaremos en un futuro si se pide, por ahora validamos básico o dejamos
-      return workerRepository.create(data);
-    } catch (error: any) {
-      console.error('Error creando trabajador:', error);
-      throw new Error(error.message);
+      return ok(workerService.getById(id));
+    } catch (e) {
+      return fail(e);
     }
   });
 
-  ipcMain.handle(WorkerChannels.UPDATE, (_, data: { id: number; data: UpdateWorkerDto }) => {
+  ipcMain.handle(WorkerChannels.IDENTIFY, (_e, payload) => {
     try {
-      return workerRepository.update(data.id, data.data);
-    } catch (error: any) {
-      console.error('Error actualizando trabajador:', error);
-      throw new Error(error.message);
+      return ok(workerService.identify(workerIdentitySchema.parse(payload)));
+    } catch (e) {
+      return fail(e);
     }
   });
 
-  ipcMain.handle(WorkerChannels.DELETE, (_, id: number) => {
+  ipcMain.handle(WorkerChannels.VALIDATE_RUT, (_e, rut: string) => {
+    return ok(isValidRut(rut));
+  });
+
+  ipcMain.handle(WorkerChannels.CREATE, (_e, payload) => {
     try {
-      workerRepository.hardDelete(id);
-      return { success: true };
-    } catch (error: any) {
-      console.error('Error eliminando trabajador:', error);
-      throw new Error(error.message);
+      const data = createWorkerSchema.parse(payload);
+      return ok(workerService.create(data));
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  ipcMain.handle(WorkerChannels.UPDATE, (_e, payload: { id: number; data: unknown; adminId?: number }) => {
+    try {
+      const data = updateWorkerSchema.parse(payload.data);
+      return ok(workerService.update(payload.id, data, payload.adminId ?? null));
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  ipcMain.handle(WorkerChannels.DEACTIVATE, (_e, payload: { id: number; adminId?: number }) => {
+    try {
+      return ok(workerService.deactivate(payload.id, payload.adminId ?? null));
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  ipcMain.handle(WorkerChannels.REACTIVATE, (_e, payload: { id: number; adminId?: number }) => {
+    try {
+      return ok(workerService.reactivate(payload.id, payload.adminId ?? null));
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  ipcMain.handle(WorkerChannels.HARD_DELETE, (_e, id: number) => {
+    try {
+      workerService.hardDelete(id);
+      return ok(true);
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  ipcMain.handle(WorkerChannels.ADVANCE_ADD, (_e, payload) => {
+    try {
+      return ok(workerService.addAdvance(advanceSchema.parse(payload)));
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  ipcMain.handle(WorkerChannels.ADVANCE_LIST, (_e, payload: { workerId: number; month: string }) => {
+    try {
+      return ok(workerService.listAdvances(payload.workerId, payload.month));
+    } catch (e) {
+      return fail(e);
+    }
+  });
+
+  ipcMain.handle(WorkerChannels.ADVANCE_DELETE, (_e, id: number) => {
+    try {
+      return ok(workerService.deleteAdvance(id));
+    } catch (e) {
+      return fail(e);
     }
   });
 }

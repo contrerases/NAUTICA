@@ -1,6 +1,7 @@
 # Nautica Jornada - Guía del Desarrollador
 
-> **Estado actual:** v0.1 en progreso - Estructura base inicializada ✅
+> **Estado actual:** v0.1 funcional — marcaje, CRUD, login, historial, finanzas y
+> configuración implementados. Última revisión: 2026-06-29.
 
 ---
 
@@ -52,13 +53,14 @@ nautica-jornada/
 │   ├── backend/                ← Main Process (Node.js)
 │   │   ├── index.ts            ← Entry point
 │   │   ├── database/
-│   │   │   └── connection.ts   ← Conexión SQLite singleton
-│   │   ├── repositories/       ← TODO: Acceso a datos (SQL)
-│   │   ├── services/           ← TODO: Lógica de negocio
-│   │   └── ipc/                ← TODO: Handlers IPC (controllers)
+│   │   │   └── connection.ts   ← Conexión SQLite singleton (better-sqlite3)
+│   │   ├── repositories/       ← Acceso a datos + cálculo de jornada
+│   │   │                         (worker, attendance, user, appConfig, advance)
+│   │   ├── services/           ← authService (login, bcrypt)
+│   │   └── ipc/                ← Handlers IPC (auth, worker, attendance, config)
 │   │
 │   ├── preload/                ← Preload script (bridge seguro)
-│   │   └── index.ts            ← Expone window.electron.invoke()
+│   │   └── index.ts            ← Expone window.electron.invoke()/on()
 │   │
 │   └── frontend/               ← Renderer Process (Vue 3)
 │       ├── main.ts             ← Entry point Vue
@@ -70,9 +72,8 @@ nautica-jornada/
 │       ├── stores/             ← Estado global (Pinia)
 │       │   ├── adminStore.ts   ← Sesión del admin
 │       │   └── configStore.ts  ← Configuración de la app
-│       ├── composables/        ← TODO: Lógica de UI reutilizable
-│       ├── views/              ← Vistas completas (placeholders creados)
-│       └── components/         ← TODO: Componentes reutilizables
+│       ├── views/              ← Vistas (PanelMarcaje, LoginAdmin, admin/*)
+│       └── components/ui/      ← Base* + DatabaseSyncIndicator
 │
 ├── resources/
 │   └── icon.ico                ← TODO: Ícono de la app
@@ -119,12 +120,13 @@ Al primer inicio, `src/backend/database/connection.ts` ejecuta automáticamente 
 
 ### Schema
 
-La base de datos tiene 4 tablas:
+La base de datos tiene 5 tablas:
 
 - `users` - Administradores (username, password_hash)
 - `workers` - Trabajadores (RUT/DNI, valor hora, auditoría)
 - `attendance_records` - Registros de asistencia (snapshots históricos, estados)
 - `app_config` - Configuración global (fila única)
+- `worker_advances` - Adelantos de dinero (se descuentan del líquido del período)
 
 Ver **LOGICA_NEGOCIO.md** para reglas detalladas.
 
@@ -202,79 +204,58 @@ if (response.ok) {
 }
 ```
 
-### En el Backend (TODO)
+### En el Backend
+
+Los handlers se registran en `backend/index.ts` (`registerAuthHandlers`,
+`setupWorkerHandlers`, `setupAttendanceHandlers`, `registerConfigHandlers`) y
+validan el payload con Zod (`src/shared/validators`). Ejemplo real:
 
 ```typescript
 import { ipcMain } from 'electron'
-import { WorkerChannels, type IpcResponse, type Worker } from '@shared/types'
+import { attendanceRepository } from '../repositories/attendanceRepository'
+import { AttendanceChannels } from '../../shared/types/ipc'
 
-ipcMain.handle(
-  WorkerChannels.GET_BY_ID,
-  async (_event, { id }): Promise<IpcResponse<Worker>> => {
-    try {
-      const worker = await WorkerRepository.findById(id)
-      return { ok: true, data: worker }
-    } catch (error) {
-      return { ok: false, error: error.message }
-    }
-  }
-)
+ipcMain.handle(AttendanceChannels.CHECK_TODAY, (_, workerId: number) => {
+  return attendanceRepository.checkToday(workerId)
+})
 ```
 
 ---
 
 ## 📋 Estado Actual del Proyecto
 
-### ✅ Completado (Fase 0 - Inicialización)
-
-- [x] Estructura de directorios creada
-- [x] Configuración completa (package.json, tsconfig, tailwind, electron-vite)
-- [x] Archivos SQL movidos a `database/`
-- [x] Tipos compartidos (shared/types) completos
-- [x] Conexión a base de datos (SQLite singleton)
-- [x] Entry points (backend, preload, frontend)
-- [x] Stores de Pinia (adminStore, configStore)
-- [x] Router de Vue configurado
-- [x] Vistas placeholder creadas
-- [x] Documentación técnica (LOGICA_NEGOCIO.md)
-
-### ⏳ Pendiente (Fase 1 - v0.1)
+### ✅ Implementado
 
 **Backend:**
-- [ ] Repositorios (WorkerRepository, AttendanceRepository, AdminRepository, ConfigRepository)
-- [ ] Servicios (WorkdayService, AttendanceService, AuthService, ReportService)
-- [ ] Handlers IPC (attendance, workers, auth, config, reports)
+- [x] Repositorios (worker, attendance, user, appConfig, advance)
+- [x] Cálculo de jornada/pago (en `attendanceRepository`: horas, extras ×1.5, atraso, colación)
+- [x] `authService` (login, bcrypt, admin por defecto)
+- [x] Handlers IPC: auth, workers, attendance, config
 
 **Frontend:**
-- [ ] Composables (useAttendance, useWorkers, useAuth, useReports)
-- [ ] Vista PanelMarcaje completa (identificación + marcaje)
-- [ ] Vista LoginAdmin completa
-- [ ] Vista Trabajadores (CRUD)
-- [ ] Vista Historial (+ cierre manual de jornadas pendientes)
-- [ ] Vista Configuracion (edición de start_hour, tolerance, etc.)
-- [ ] Componentes reutilizables (DocumentInput, ResumenDia, etc.)
+- [x] PanelMarcaje (identificación + marcaje inteligente)
+- [x] LoginAdmin + sesión Pinia con timeout
+- [x] Trabajadores (CRUD), Historial (+ cierre de pendientes), Finanzas (adelantos), Configuracion, Dashboard
+- [x] Componentes base (`components/ui/Base*`)
 
 **Validaciones:**
-- [ ] Función validateRut (frontend + backend)
-- [ ] Validaciones de horarios (exit > entry, etc.)
-- [ ] Validación de colación en jornadas cortas
+- [x] Esquemas Zod en `src/shared/validators` (RUT, marcaje, etc.)
 
-**Utilerías:**
-- [ ] Función de cálculo de minutos trabajados
-- [ ] Función de cálculo de atrasos
-- [ ] Formateo de horas (HH:MM)
-- [ ] Formateo de moneda (CLP)
+### ⏳ Pendiente
+
+- [ ] Handlers IPC de reportes/exportación (`ReportChannels`) — ExcelJS ya está en deps
+- [ ] `resources/icon.ico` e instalador NSIS (Fase 4)
+- [ ] Modo kiosk y manual de usuario (Fase 4)
+- [ ] Pruebas end-to-end del flujo de marcaje
 
 ---
 
 ## 🔍 Próximos Pasos
 
-1. **Implementar repositorios** → Acceso a datos con better-sqlite3
-2. **Implementar servicios** → Lógica de negocio (usar LOGICA_NEGOCIO.md como referencia)
-3. **Registrar handlers IPC** → Conectar backend con frontend
-4. **Implementar composables** → Lógica de UI que llama a IPC
-5. **Completar vistas** → Panel de marcaje, login, CRUD de trabajadores
-6. **Pruebas** → Verificar flujo completo de marcaje
+1. **Registrar handlers de reportes** → conectar `ReportChannels` + exportación Excel
+2. **Agregar el ícono** → `resources/icon.ico` para poder empaquetar
+3. **Empaquetar** → `npm run package` (instalador NSIS)
+4. **Pruebas** → verificar flujo completo de marcaje y cálculos de pago
 
 ---
 
@@ -320,9 +301,10 @@ En modo desarrollo, presiona **F12** o **Ctrl+Shift+I** para abrir DevTools de E
 
 ## ❗ Problemas Conocidos
 
-- **Falta el ícono:** `resources/icon.ico` no existe aún. El build fallará si intentas empaquetar.
-- **Handlers IPC no registrados:** El backend tiene un TODO para registrar los handlers.
-- **Administrador por defecto:** No se crea automáticamente (requiere hash bcrypt, se hará en AuthService).
+- **Falta el ícono:** `resources/icon.ico` no existe aún. `npm run package` fallará hasta agregarlo.
+- **Reportes/Excel sin conectar:** `ReportChannels` está definido en los tipos pero no hay handler registrado en `backend/index.ts`.
+- **Seeds de demo en producción:** `database/seeds.sql` inserta trabajadores y registros de muestra que también se cargan en una instalación nueva. Vaciarlo (o dejar solo el `app_config`) antes de distribuir si no se quieren datos de ejemplo.
+- **Admin por defecto:** se crea automáticamente al primer inicio vía `AuthService.ensureDefaultAdmin()`. Conviene cambiar la contraseña tras instalar.
 
 ---
 

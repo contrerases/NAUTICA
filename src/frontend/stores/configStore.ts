@@ -1,92 +1,62 @@
 /**
- * Config Store - Configuración global de la aplicación
+ * Config Store — configuración global (vigente hoy) y cambio pendiente.
  */
-
-import { defineStore } from 'pinia'
-import { ref } from 'vue'
-import type { AppConfig, UpdateConfigDto } from '@shared/types'
-import { ConfigChannels } from '@shared/types'
+import { defineStore } from 'pinia';
+import { ref, computed } from 'vue';
+import type { ConfigVersion, UpdateConfigDto } from '@shared/types';
+import { api } from '../api';
 
 export const useConfigStore = defineStore('config', () => {
-  /**
-   * Estado
-   */
-  const config = ref<AppConfig | null>(null)
-  const loading = ref(false)
-  const error = ref<string | null>(null)
+  /** Config vigente hoy. */
+  const current = ref<ConfigVersion | null>(null);
+  /** Cambio programado a futuro (o null). */
+  const pending = ref<ConfigVersion | null>(null);
+  const loading = ref(false);
+  const error = ref<string | null>(null);
 
-  /**
-   * Actions
-   */
+  /** Alias de conveniencia: la config que corre hoy. */
+  const config = computed(() => current.value);
 
-  /**
-   * Carga la configuración desde el backend
-   */
   async function loadConfig(): Promise<void> {
-    loading.value = true
-    error.value = null
-
+    loading.value = true;
+    error.value = null;
     try {
-      const response = await window.electron.invoke<AppConfig>(ConfigChannels.GET)
-
-      if (response.ok && response.data) {
-        config.value = response.data
-      } else {
-        error.value = response.error || 'Error al cargar configuración'
-      }
+      const view = await api.config.get();
+      current.value = view.current;
+      pending.value = view.pending;
     } catch (err) {
-      error.value = 'Error de conexión con el backend'
-      console.error('[ConfigStore] Error al cargar config:', err)
+      error.value = err instanceof Error ? err.message : 'Error al cargar configuración';
+      console.error('[ConfigStore] loadConfig:', err);
     } finally {
-      loading.value = false
+      loading.value = false;
     }
   }
 
-  /**
-   * Actualiza la configuración
-   */
   async function updateConfig(updates: UpdateConfigDto): Promise<boolean> {
-    loading.value = true
-    error.value = null
-
+    loading.value = true;
+    error.value = null;
     try {
-      const response = await window.electron.invoke<AppConfig>(
-        ConfigChannels.UPDATE,
-        updates
-      )
-
-      if (response.ok && response.data) {
-        config.value = response.data
-        return true
-      } else {
-        error.value = response.error || 'Error al actualizar configuración'
-        return false
-      }
+      const view = await api.config.update(updates);
+      current.value = view.current;
+      pending.value = view.pending;
+      return true;
     } catch (err) {
-      error.value = 'Error de conexión con el backend'
-      console.error('[ConfigStore] Error al actualizar config:', err)
-      return false
+      error.value = err instanceof Error ? err.message : 'Error al actualizar configuración';
+      return false;
     } finally {
-      loading.value = false
+      loading.value = false;
     }
   }
 
-  /**
-   * Marca el onboarding como completado
-   */
+  async function cancelPending(): Promise<void> {
+    const view = await api.config.cancelPending();
+    current.value = view.current;
+    pending.value = view.pending;
+  }
+
   async function completeOnboarding(): Promise<boolean> {
-    return updateConfig({ onboarding_done: 1 })
+    return updateConfig({ onboardingDone: true, applyFrom: 'today' });
   }
 
-  return {
-    // State
-    config,
-    loading,
-    error,
-
-    // Actions
-    loadConfig,
-    updateConfig,
-    completeOnboarding
-  }
-})
+  return { current, pending, config, loading, error, loadConfig, updateConfig, cancelPending, completeOnboarding };
+});

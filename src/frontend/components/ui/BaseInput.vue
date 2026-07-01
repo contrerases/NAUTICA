@@ -23,6 +23,9 @@
       />
     </div>
     <p v-if="error" class="text-xs text-danger mt-1 ml-1 font-medium">{{ error }}</p>
+    <p v-else-if="hint || $slots.hint" class="text-xs text-text-muted mt-1 ml-1">
+      <slot name="hint">{{ hint }}</slot>
+    </p>
   </div>
 </template>
 
@@ -37,6 +40,7 @@ defineProps<{
   type?: string;
   placeholder?: string;
   error?: string;
+  hint?: string;
   disabled?: boolean;
 }>();
 

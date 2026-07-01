@@ -1,55 +1,40 @@
-/**
- * Tipos relacionados con reportes y estadísticas
- */
+/** Tipos de liquidación mensual y reportes. Dinero en enteros CLP. */
 
-export type ReportPeriod = 'day' | 'week' | 'month' | 'custom'
+import type { WorkerStatus } from './worker';
 
-export interface ReportFilter {
-  period: ReportPeriod
-  date_from: string // "YYYY-MM-DD"
-  date_to: string // "YYYY-MM-DD"
-  worker_id?: number
+export interface PeriodFilter {
+  year: number;
+  month: number; // 1-12
 }
 
-export interface ReportRow {
-  worker_name: string
-  date: string
-  entry_time: string
-  exit_time: string | null
-  worked_minutes: number
-  overtime_minutes: number
-  delay_minutes: number
-  daily_payment: number
-  status: string
+/** Liquidación de un trabajador en el período. net_payment puede ser negativo (deuda). */
+export interface WorkerLiquidation {
+  worker_id: number;
+  worker_name: string;
+  status: WorkerStatus;
+  days_worked: number;
+  total_minutes: number;
+  overtime_minutes: number;
+  base_payment: number;
+  overtime_payment: number;
+  gross_payment: number; // base + extra
+  advances_amount: number; // adelantos del mes
+  net_payment: number; // gross - advances (puede ser < 0 → deuda)
+  has_debt: boolean; // net_payment < 0
 }
 
-export interface WorkerPeriodSummary {
-  worker_id: number
-  worker_name: string
-  total_days_worked: number
-  total_hours: number
-  total_overtime: number
-  total_delays: number
-  total_payment: number
-}
-
-export interface Trend {
-  current: number
-  previous: number
-  change: number // Porcentaje de cambio
-  direction: 'up' | 'down' | 'stable'
-}
-
-export interface WorkerTrends {
-  hours_worked: Trend
-  delays: Trend
-  overtime: Trend
+export interface PayrollSummary {
+  period: string; // "YYYY-MM"
+  provisional: boolean; // true si hay turnos OPEN/PENDING que aún no suman
+  total_gross: number;
+  total_advances: number;
+  total_net: number;
+  workers: WorkerLiquidation[];
 }
 
 export interface DashboardStats {
-  today_active_workers: number
-  today_pending_exits: number
-  week_total_hours: number
-  week_total_payments: number
-  pending_shifts_count: number
+  today_active_shifts: number; // OPEN de hoy
+  today_closed_shifts: number;
+  missing_exits: number; // OPEN de días anteriores
+  month_gross: number;
 }

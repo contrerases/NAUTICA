@@ -84,16 +84,20 @@
       <!-- Footer / Regresar -->
       <template #footer>
         <div class="text-center">
-          <button
-            @click="goBack"
-            class="inline-flex items-center text-sm font-bold text-text-muted hover:text-primary transition-colors"
+          <BaseButton
+            variant="ghost"
+            size="sm"
+            class="text-sm font-bold text-text-muted hover:text-primary"
             :disabled="isLoading"
+            @click="goBack"
           >
-            <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-            </svg>
+            <template #icon-left>
+              <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+              </svg>
+            </template>
             Volver al panel de marcaje
-          </button>
+          </BaseButton>
         </div>
       </template>
       
@@ -104,6 +108,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { api } from '../api'
 import { useAdminStore } from '../stores/adminStore'
 import BaseCard from '../components/ui/BaseCard.vue'
 import BaseInput from '../components/ui/BaseInput.vue'
@@ -124,24 +129,20 @@ async function handleLogin() {
   errorMessage.value = ''
 
   try {
-    // 1. Llamar al backend a través de IPC
-    const response: any = await window.electron.invoke('auth:login', {
+    // 1. Autenticar mediante el cliente tipado (devuelve el Admin o lanza)
+    const admin = await api.auth.login({
       username: username.value,
       password: password.value
     })
 
-    if (response.success && response.user) {
-      // 2. Guardar en el store de Pinia
-      adminStore.login(response.user)
-      
-      // 3. Redirigir al dashboard
-      router.push({ name: 'Dashboard' })
-    } else {
-      errorMessage.value = response.error || 'Credenciales inválidas'
-      password.value = '' // Limpiar contraseña en caso de error
-    }
+    // 2. Guardar en el store de Pinia
+    adminStore.login(admin)
+
+    // 3. Redirigir al dashboard
+    router.push({ name: 'Dashboard' })
   } catch (error: any) {
-    errorMessage.value = error.message || 'Error de conexión con el servidor local'
+    errorMessage.value = error?.message || 'Credenciales inválidas'
+    password.value = '' // Limpiar contraseña en caso de error
   } finally {
     isLoading.value = false
   }

@@ -1,12 +1,10 @@
 <template>
   <div class="flex flex-col space-y-6 h-full p-6">
     <!-- Encabezado -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div>
-        <h2 class="text-3xl font-extrabold text-text-base">Ajustes del Sistema</h2>
-        <p class="text-text-muted mt-1">Configuración global de jornada, tolerancias y permisos.</p>
-      </div>
-    </div>
+    <PageHeader
+      title="Ajustes del Sistema"
+      subtitle="Configuración global de jornada, tolerancias y permisos."
+    />
 
     <!-- Alertas -->
     <div class="flex flex-col gap-3 mb-2" v-if="configStore.error || successMsg">
@@ -19,7 +17,7 @@
       />
       <BaseAlert
         v-if="successMsg"
-        type="warning"
+        type="success"
         title="Configuración Actualizada - Importante"
         :message="successMsg"
         dismissible
@@ -35,85 +33,75 @@
             <!-- Hora inicio -->
             <div>
               <BaseInput
-                v-model="formData.start_hour"
+                v-model="formData.startHour"
                 id="conf-start"
                 type="time"
                 label="Hora de Inicio Oficial"
                 required
                 :disabled="configStore.loading"
+                hint="Hora base referencial a partir de la cual empezarán a contar los atrasos si se excede la tolerancia."
               />
-              <p class="text-xs text-text-muted mt-2">
-                Hora base referencial a partir de la cual empezarán a contar los atrasos si se excede la tolerancia.
-              </p>
             </div>
 
             <!-- Hora Salida -->
             <div>
               <BaseInput
-                v-model="formData.exit_hour"
+                v-model="formData.exitHour"
                 id="conf-exit"
                 type="time"
                 label="Hora de Salida Oficial"
                 required
                 :disabled="configStore.loading"
+                hint="Hora requerida para el cálculo unificado del total a pagar (jornada máxima)."
               />
-              <p class="text-xs text-text-muted mt-2">
-                Hora requerida para el cálculo unificado del total a pagar (jornada máxima).
-              </p>
             </div>
 
             <!-- Tolerancia -->
             <div>
               <BaseInput
-                v-model.number="formData.tolerance_minutes"
+                v-model.number="formData.toleranceMinutes"
                 id="conf-tol"
                 type="number"
                 label="Tolerancia de Atraso (min.)"
                 required
                 min="0"
                 :disabled="configStore.loading"
+                hint="Margen de gracia al entrar. Un minuto tarde descuenta 1 minuto exacto del pago total."
               />
-              <p class="text-xs text-text-muted mt-2">
-                Margen de gracia al entrar. Un minuto tarde descuenta 1 minuto exacto del pago total.
-              </p>
             </div>
 
             <!-- Tolerancia Marcaje Salida -->
             <div>
               <BaseInput
-                v-model.number="formData.exit_tolerance_minutes"
+                v-model.number="formData.exitToleranceMinutes"
                 id="conf-exit-tol"
                 type="number"
                 label="Tolerancia Marcaje Salida (min.)"
                 required
                 min="0"
                 :disabled="configStore.loading"
+                hint="Minutos permitidos para marcar la salida antes de la hora real estipulada."
               />
-              <p class="text-xs text-text-muted mt-2">
-                Minutos permitidos para marcar la salida antes de la hora real estipulada.
-              </p>
             </div>
 
             <!-- Colación -->
             <div>
               <BaseInput
-                v-model.number="formData.default_break_minutes"
+                v-model.number="formData.defaultBreakMinutes"
                 id="conf-break"
                 type="number"
                 label="Minutos de Colación Oficial"
                 required
                 min="0"
                 :disabled="configStore.loading"
+                hint="Duración del descanso de almuerzo a descontar del tiempo trabajado."
               />
-              <p class="text-xs text-text-muted mt-2">
-                Duración del descanso de almuerzo a descontar del tiempo trabajado.
-              </p>
             </div>
 
             <!-- Jornada Base -->
             <div class="sm:col-span-2">
               <BaseInput
-                v-model.number="formData.base_daily_hours"
+                v-model.number="formData.baseDailyHours"
                 id="conf-base"
                 type="number"
                 step="0.1"
@@ -121,17 +109,14 @@
                 required
                 min="0"
                 :disabled="configStore.loading"
+                hint="Usado para cálculos estándar. Con soporte para decimales, ejemplo: 8.5"
               />
-              <p class="text-xs text-text-muted mt-2">
-                Usado para cálculos estándar. Con soporte para decimales, ejemplo: 8.5
-
-              </p>
             </div>
-            
+
             <!-- Valor de Hora Extra -->
             <div class="sm:col-span-2">
               <BaseInput
-                v-model.number="formData.overtime_multiplier"
+                v-model.number="formData.overtimeMultiplier"
                 id="conf-overtime-mult"
                 type="number"
                 step="0.01"
@@ -139,15 +124,62 @@
                 required
                 min="1.0"
                 :disabled="configStore.loading"
+                hint="Factor de recargo general para las horas extras. Ejemplo: 1.5 significa 50% de recargo sobre el valor base de la hora del trabajador."
               />
-              <p class="text-xs text-text-muted mt-2">
-                Factor de recargo general para las horas extras. Ejemplo: 1.5 significa 50% de recargo sobre el valor base de la hora del trabajador. ESTOS CAMBIOS ENTRARÁN A REGIR EL DÍA SIGUIENTE.
-              </p>
             </div>
-            
+
           </div>
 
-          <div class="mt-4 pt-6 border-t border-surface-border flex justify-end">
+          <!-- Aplicar desde -->
+          <div class="flex flex-col gap-3 pt-2">
+            <span class="text-sm font-semibold text-text-base">Aplicar cambios desde</span>
+            <div class="flex flex-col sm:flex-row gap-3">
+              <label
+                class="flex-1 flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
+                :class="formData.applyFrom === 'tomorrow' ? 'border-primary bg-primary/5' : 'border-surface-border'"
+              >
+                <input
+                  type="radio"
+                  value="tomorrow"
+                  v-model="formData.applyFrom"
+                  :disabled="configStore.loading"
+                  class="mt-1"
+                />
+                <span>
+                  <span class="block text-sm font-medium text-text-base">Mañana (recomendado)</span>
+                  <span class="block text-xs text-text-muted">Los marcajes de hoy conservan su configuración; el cambio rige desde mañana.</span>
+                </span>
+              </label>
+              <label
+                class="flex-1 flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
+                :class="formData.applyFrom === 'today' ? 'border-primary bg-primary/5' : 'border-surface-border'"
+              >
+                <input
+                  type="radio"
+                  value="today"
+                  v-model="formData.applyFrom"
+                  :disabled="configStore.loading"
+                  class="mt-1"
+                />
+                <span>
+                  <span class="block text-sm font-medium text-text-base">Hoy</span>
+                  <span class="block text-xs text-text-muted">Aplica de inmediato y afecta el cálculo de los marcajes de hoy.</span>
+                </span>
+              </label>
+            </div>
+
+            <BaseAlert
+              v-if="formData.applyFrom === 'today'"
+              type="warning"
+              title="Atención"
+              message="Aplicar desde HOY recalculará los marcajes registrados hoy con los nuevos parámetros."
+            />
+          </div>
+
+          <div class="mt-4 pt-6 border-t border-surface-border flex items-center justify-between gap-4">
+            <p class="text-sm text-text-muted" v-if="configStore.current">
+              Vigente desde: <span class="font-medium text-text-base">{{ configStore.current.effectiveFrom }}</span>
+            </p>
             <BaseButton type="submit" variant="primary" :is-loading="configStore.loading">
               <template #icon>
                 <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
@@ -171,6 +203,23 @@
 
       <!-- Info lateral y Cambio de Contraseña -->
       <div class="flex flex-col space-y-6">
+        <!-- Cambio programado (pending) -->
+        <BaseCard v-if="configStore.pending" class="bg-warning/5 border-warning/30">
+          <h3 class="text-lg font-bold text-warning flex items-center gap-2 mb-3">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Cambio programado
+          </h3>
+          <p class="text-sm text-text-muted mb-4">
+            Hay una configuración que entrará en vigencia el
+            <span class="font-medium text-text-base">{{ configStore.pending.effectiveFrom }}</span>.
+          </p>
+          <div class="flex justify-end">
+            <BaseButton variant="secondary" :is-loading="cancelLoading" @click="cancelPending">
+              Cancelar cambio
+            </BaseButton>
+          </div>
+        </BaseCard>
+
         <BaseCard class="bg-primary/5 border-primary/20">
           <h3 class="text-lg font-bold text-primary flex items-center gap-2 mb-3">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -249,40 +298,37 @@
 import { ref, onMounted, watch } from 'vue';
 import { useConfigStore } from '../../stores/configStore';
 import { useAdminStore } from '../../stores/adminStore';
-import { AuthChannels } from '../../../shared/types/ipc';
+import { api } from '../../api';
 
-import BaseCard from '../../components/ui/BaseCard.vue';
-import BaseInput from '../../components/ui/BaseInput.vue';
-import BaseButton from '../../components/ui/BaseButton.vue';
-import BaseAlert from '../../components/ui/BaseAlert.vue';
+import { PageHeader, BaseCard, BaseInput, BaseButton, BaseAlert } from '../../components/ui';
 
 const configStore = useConfigStore();
 const adminStore = useAdminStore();
 const successMsg = ref('');
 
 const formData = ref({
-  start_hour: '09:00',
-  exit_hour: '18:00',
-  tolerance_minutes: 5,
-  exit_tolerance_minutes: 15,
-  default_break_minutes: 30,
-  base_daily_hours: 8.5,
-  overtime_rate: 5000,
-  overtime_multiplier: 1.5
+  startHour: '09:00',
+  exitHour: '18:00',
+  toleranceMinutes: 5,
+  exitToleranceMinutes: 15,
+  defaultBreakMinutes: 30,
+  baseDailyHours: 8.5,
+  overtimeMultiplier: 1.5,
+  applyFrom: 'tomorrow' as 'today' | 'tomorrow'
 });
 
-// Sincronizar store state con form local
+// Sincronizar store state (config vigente hoy, camelCase) con el form local
 watch(() => configStore.config, (newConf) => {
   if (newConf) {
     formData.value = {
-      start_hour: newConf.start_hour,
-      exit_hour: newConf.exit_hour || '18:00',
-      tolerance_minutes: newConf.tolerance_minutes,
-      exit_tolerance_minutes: newConf.exit_tolerance_minutes !== undefined ? newConf.exit_tolerance_minutes : 15,
-      default_break_minutes: newConf.default_break_minutes !== undefined ? newConf.default_break_minutes : 30,
-      base_daily_hours: newConf.base_daily_hours,
-      overtime_rate: newConf.overtime_rate !== undefined ? newConf.overtime_rate : 5000,
-      overtime_multiplier: newConf.overtime_multiplier !== undefined ? newConf.overtime_multiplier : 1.5
+      startHour: newConf.startHour,
+      exitHour: newConf.exitHour,
+      toleranceMinutes: newConf.toleranceMinutes,
+      exitToleranceMinutes: newConf.exitToleranceMinutes,
+      defaultBreakMinutes: newConf.defaultBreakMinutes,
+      baseDailyHours: newConf.baseDailyHours,
+      overtimeMultiplier: newConf.overtimeMultiplier,
+      applyFrom: 'tomorrow'
     };
   }
 }, { deep: true, immediate: true });
@@ -290,19 +336,34 @@ watch(() => configStore.config, (newConf) => {
 const saveConfig = async () => {
   successMsg.value = '';
   const ok = await configStore.updateConfig({
-    start_hour: formData.value.start_hour,
-    exit_hour: formData.value.exit_hour,
-    tolerance_minutes: Number(formData.value.tolerance_minutes),
-    exit_tolerance_minutes: Number(formData.value.exit_tolerance_minutes),      
-    default_break_minutes: Number(formData.value.default_break_minutes),        
-    base_daily_hours: Number(formData.value.base_daily_hours),
-    overtime_rate: Number(formData.value.overtime_rate),
-    overtime_multiplier: Number(formData.value.overtime_multiplier)
+    startHour: formData.value.startHour,
+    exitHour: formData.value.exitHour,
+    toleranceMinutes: Number(formData.value.toleranceMinutes),
+    exitToleranceMinutes: Number(formData.value.exitToleranceMinutes),
+    defaultBreakMinutes: Number(formData.value.defaultBreakMinutes),
+    baseDailyHours: Number(formData.value.baseDailyHours),
+    overtimeMultiplier: Number(formData.value.overtimeMultiplier),
+    applyFrom: formData.value.applyFrom
   });
 
   if (ok) {
-    successMsg.value = 'AVISO IMPORTANTE: Los cambios en la configuración (incluido el multiplicador extra) ya fueron guardados. Todos los ajustes aplicarán a las marcaciones desde el SIGUIENTE turno.';
+    successMsg.value = formData.value.applyFrom === 'today'
+      ? 'Configuración guardada. Los cambios aplican desde HOY y recalculan los marcajes registrados hoy.'
+      : 'Configuración guardada. Los cambios entrarán en vigencia MAÑANA; los marcajes de hoy conservan su configuración actual.';
     setTimeout(() => successMsg.value = '', 6000);
+  }
+};
+
+// Cancelar cambio programado (pending)
+const cancelLoading = ref(false);
+const cancelPending = async () => {
+  cancelLoading.value = true;
+  try {
+    await configStore.cancelPending();
+  } catch (error: any) {
+    configStore.error = error?.message || 'No se pudo cancelar el cambio programado.';
+  } finally {
+    cancelLoading.value = false;
   }
 };
 
@@ -332,23 +393,19 @@ const changePassword = async () => {
 
   pwdLoading.value = true;
   try {
-    const res = await window.electron.invoke(AuthChannels.CHANGE_PASSWORD, {
+    await api.auth.changePassword({
       username: adminStore.username,
       oldPassword: pwdForm.value.oldPassword,
       newPassword: pwdForm.value.newPassword
     });
 
-    if (res && res.success) {
-      pwdSuccess.value = 'Contraseña actualizada exitosamente.';
-      pwdForm.value.oldPassword = '';
-      pwdForm.value.newPassword = '';
-      pwdForm.value.confirmPassword = '';
-      setTimeout(() => pwdSuccess.value = '', 4000);
-    } else {
-      pwdError.value = res?.error || 'Error al cambiar la contraseña';
-    }
+    pwdSuccess.value = 'Contraseña actualizada exitosamente.';
+    pwdForm.value.oldPassword = '';
+    pwdForm.value.newPassword = '';
+    pwdForm.value.confirmPassword = '';
+    setTimeout(() => pwdSuccess.value = '', 4000);
   } catch (error: any) {
-    pwdError.value = error.message || 'Ocurrió un error inesperado';
+    pwdError.value = error?.message || 'Ocurrió un error inesperado';
   } finally {
     pwdLoading.value = false;
   }

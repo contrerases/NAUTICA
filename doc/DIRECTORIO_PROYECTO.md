@@ -1,109 +1,111 @@
 # Náutica Jornada — Estructura del Proyecto
 
+> Árbol real del repositorio (sincronizado con el código). Última revisión: 2026-06-29.
+
 ```
 nautica-jornada/
 │
-├── database/
-│   ├── nautica_jornada.sql          ← BD completa (schema + constraints + seeds)
-│   ├── schema.sql                   ← Solo tablas y columnas
-│   ├── constraints.sql              ← Solo restricciones e índices
-│   └── seeds.sql                    ← Solo datos iniciales
+├── database/                          ← Archivos SQL
+│   ├── nautica_jornada.sql            ← BD completa (schema + constraints + seed config). Se ejecuta al primer inicio.
+│   ├── schema.sql                     ← Referencia: solo tablas y columnas
+│   ├── constraints.sql                ← Referencia: restricciones e índices documentados
+│   └── seeds.sql                      ← Datos de muestra (trabajadores, asistencia, adelantos)
 │
-├── resources/
-│   └── icon.ico                     ← Ícono del instalador
-│
-├── scripts/
-│   ├── db-init.ts                   ← Crea la BD desde los .sql
-│   └── db-reset.ts                  ← Elimina y recrea la BD
+├── doc/                               ← Documentación
+│   ├── INDEX.md                       ← Índice de la documentación
+│   ├── README.md                      ← Funcional: épicas, HU, roadmap, stack
+│   ├── README_DEV.md                  ← Guía del desarrollador (setup, IPC, debugging)
+│   ├── LOGICA_NEGOCIO.md              ← Reglas de negocio y fórmulas de cálculo
+│   └── DIRECTORIO_PROYECTO.md         ← Este archivo
 │
 ├── src/
 │   │
-│   ├── shared/
-│   │   └── types/
-│   │       ├── index.ts             ← Barrel export
-│   │       ├── worker.ts            ← Worker, CreateWorkerDto, UpdateWorkerDto, DocumentType
-│   │       ├── attendance.ts        ← AttendanceRecord, DaySummary, AttendanceStatus, DTOs
-│   │       ├── admin.ts             ← Admin, LoginDto, LoginResult, AdminSession
-│   │       ├── config.ts            ← AppConfig, UpdateConfigDto
-│   │       ├── reports.ts           ← WorkerPeriodSummary, ReportRow, ReportFilter, Trend
-│   │       └── ipc.ts               ← IpcChannels tipados — contrato Main ↔ Renderer
+│   ├── shared/                        ── COMPARTIDO entre backend y frontend
+│   │   ├── types/
+│   │   │   ├── index.ts               ← Barrel export
+│   │   │   ├── worker.ts              ← Worker, CreateWorkerDto, UpdateWorkerDto, DocumentType
+│   │   │   ├── attendance.ts          ← AttendanceRecord, CheckAttendanceResult, DTOs
+│   │   │   ├── admin.ts               ← Admin, LoginDto, LoginResult, AdminSession
+│   │   │   ├── config.ts              ← AppConfig, UpdateConfigDto
+│   │   │   ├── reports.ts             ← WorkerPeriodSummary, ReportRow, ReportFilter, Trend
+│   │   │   └── ipc.ts                 ← Enums de canales IPC tipados (contrato backend ↔ frontend)
+│   │   └── validators/
+│   │       └── index.ts               ← Esquemas Zod (markEntry, markExit, RUT, etc.)
 │   │
-│   ├── backend/
-│   │   ├── index.ts                 ← Entry point: ventana + DI + registro IPC
+│   ├── backend/                       ── MAIN PROCESS (Node.js)
+│   │   ├── index.ts                   ← Entry point: DB, AuthService.ensureDefaultAdmin, handlers IPC, ventana
 │   │   │
 │   │   ├── database/
-│   │   │   └── connection.ts        ← Singleton SQLite, lee y ejecuta los .sql
+│   │   │   └── connection.ts          ← Singleton better-sqlite3 + migraciones al primer inicio
 │   │   │
-│   │   ├── repositories/
-│   │   │   ├── WorkerRepository.ts
-│   │   │   ├── AttendanceRepository.ts
-│   │   │   ├── AdminRepository.ts
-│   │   │   └── ConfigRepository.ts
+│   │   ├── repositories/              ← Acceso a datos. Contienen también el cálculo de jornada.
+│   │   │   ├── workerRepository.ts
+│   │   │   ├── attendanceRepository.ts ← markEntry / markExit / updateRecord (cálculo de horas y pago)
+│   │   │   ├── userRepository.ts
+│   │   │   ├── appConfigRepository.ts
+│   │   │   └── advanceRepository.ts   ← Adelantos de dinero (worker_advances)
 │   │   │
 │   │   ├── services/
-│   │   │   ├── WorkdayService.ts    ← Cálculos: horas, pagos, atrasos, validación RUT
-│   │   │   ├── AttendanceService.ts ← Orquesta el flujo de marcaje
-│   │   │   ├── AuthService.ts       ← Login y gestión de administradores
-│   │   │   └── ReportService.ts     ← Estadísticas, tendencias y exportación Excel
+│   │   │   └── authService.ts         ← Login, hash bcrypt, admin por defecto
 │   │   │
-│   │   └── ipc/
-│   │       ├── attendance.ipc.ts
-│   │       ├── workers.ipc.ts
-│   │       ├── auth.ipc.ts
-│   │       ├── reports.ipc.ts
-│   │       └── config.ipc.ts
+│   │   └── ipc/                       ← Handlers IPC (equivalen a controllers)
+│   │       ├── authHandlers.ts
+│   │       ├── workerHandlers.ts
+│   │       ├── attendanceHandlers.ts
+│   │       └── configHandlers.ts
 │   │
 │   ├── preload/
-│   │   └── index.ts                 ← Expone window.electron.invoke() al frontend
+│   │   └── index.ts                   ← Expone window.electron.invoke()/on() vía contextBridge
 │   │
-│   └── frontend/
-│       ├── index.html
-│       ├── main.ts                  ← Entry point Vue: app + router + pinia
+│   └── frontend/                      ── RENDERER PROCESS (Vue 3)
+│       ├── main.ts                    ← Entry point Vue: app + router + Pinia
 │       ├── App.vue
+│       ├── env.d.ts
 │       │
 │       ├── assets/
-│       │   └── main.css             ← Tailwind entry
+│       │   └── main.css               ← Tailwind entry
 │       │
 │       ├── router/
-│       │   └── index.ts             ← Rutas + guards de autenticación
+│       │   └── index.ts               ← Rutas + guards de autenticación
 │       │
 │       ├── stores/
-│       │   ├── adminStore.ts        ← Sesión admin + timeout de expiración
-│       │   └── configStore.ts       ← Configuración de la app
+│       │   ├── adminStore.ts          ← Sesión admin + timeout de expiración
+│       │   └── configStore.ts         ← Configuración de la app
 │       │
-│       ├── composables/
-│       │   ├── useAttendance.ts
-│       │   ├── useWorkers.ts
-│       │   ├── useAuth.ts
-│       │   └── useReports.ts
+│       ├── components/
+│       │   └── ui/                    ← Componentes base reutilizables
+│       │       ├── BaseAlert.vue
+│       │       ├── BaseBadge.vue
+│       │       ├── BaseButton.vue
+│       │       ├── BaseCard.vue
+│       │       ├── BaseInput.vue
+│       │       ├── BaseModal.vue
+│       │       ├── BaseTable.vue
+│       │       └── DatabaseSyncIndicator.vue
 │       │
-│       ├── views/
-│       │   ├── PanelMarcaje.vue     ← Pantalla principal de marcaje
-│       │   ├── LoginAdmin.vue
-│       │   └── admin/
-│       │       ├── PanelAdmin.vue   ← Shell con navegación lateral
-│       │       ├── Dashboard.vue
-│       │       ├── Trabajadores.vue
-│       │       ├── Historial.vue
-│       │       ├── Estadisticas.vue
-│       │       └── Configuracion.vue
-│       │
-│       └── components/
-│           ├── ui/
-│           │   ├── BaseButton.vue
-│           │   ├── BaseInput.vue
-│           │   └── BaseModal.vue
-│           └── domain/
-│               ├── DocumentInput.vue   ← Input RUT/DNI con validación
-│               ├── ResumenDia.vue      ← Tarjeta resumen de jornada
-│               └── WorkerCard.vue
+│       └── views/                     ← Páginas del router
+│           ├── PanelMarcaje.vue       ← Pantalla principal de marcaje (kiosk)
+│           ├── LoginAdmin.vue
+│           └── admin/
+│               ├── PanelAdmin.vue     ← Shell con navegación lateral
+│               ├── Dashboard.vue
+│               ├── Trabajadores.vue   ← CRUD de trabajadores
+│               ├── Historial.vue      ← Historial + cierre de pendientes
+│               ├── Finanzas.vue       ← Liquidaciones del período + adelantos
+│               └── Configuracion.vue  ← Ajustes de jornada
 │
+├── index.html                         ← Entry point del Renderer
 ├── electron.vite.config.ts
 ├── tailwind.config.js
-├── tsconfig.json
-├── tsconfig.node.json               ← src/backend + src/preload + src/shared
-├── tsconfig.web.json                ← src/frontend + src/shared
+├── postcss.config.js
+├── tsconfig.json                      ← Raíz (referencias)
+├── tsconfig.node.json                 ← src/backend + src/preload + src/shared
+├── tsconfig.web.json                  ← src/frontend + src/shared
 ├── package.json
-├── .gitignore
-└── README.md
+└── .gitignore
 ```
+
+> **Nota:** la lógica de cálculo de jornada vive en `attendanceRepository.ts`
+> (no hay servicios `WorkdayService` / `ReportService` separados). Tampoco
+> existen `composables/`: las vistas llaman a `window.electron.invoke()`
+> directamente o a través de los stores de Pinia.

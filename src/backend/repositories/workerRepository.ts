@@ -1,127 +1,96 @@
 import { getDatabase } from '../database/connection';
-import type { Worker, CreateWorkerDto, UpdateWorkerDto, WorkerIdentityDto, WorkerStatus } from '../../shared/types/worker';
+import type { Worker, WorkerStatus } from '../../shared/types/worker';
 
-export class WorkerRepository {
+/** Acceso a datos de trabajadores y su historial de tarifa. Solo SQL. */
+export const workerRepository = {
   getAll(): Worker[] {
-    const db = getDatabase();
-    return db.prepare('SELECT * FROM workers ORDER BY name ASC').all() as Worker[];
-  }
+    return getDatabase().prepare('SELECT * FROM workers ORDER BY name ASC').all() as Worker[];
+  },
 
   getActive(): Worker[] {
-    const db = getDatabase();
-    return db.prepare("SELECT * FROM workers WHERE status = 'ACTIVE' ORDER BY name ASC").all() as Worker[];
-  }
+    return getDatabase()
+      .prepare("SELECT * FROM workers WHERE status = 'ACTIVE' ORDER BY name ASC")
+      .all() as Worker[];
+  },
 
   findById(id: number): Worker | undefined {
-    const db = getDatabase();
-    return db.prepare('SELECT * FROM workers WHERE id = ?').get(id) as Worker | undefined;
-  }
+    return getDatabase().prepare('SELECT * FROM workers WHERE id = ?').get(id) as Worker | undefined;
+  },
 
-  findByIdentity(identity: WorkerIdentityDto): Worker | undefined {
-    const db = getDatabase();
-    if (identity.documentType === 'RUT') {
-      return db.prepare("SELECT * FROM workers WHERE rut = ? AND status = 'ACTIVE'").get(identity.documentValue) as Worker | undefined;
-    } else {
-      return db.prepare("SELECT * FROM workers WHERE dni = ? AND status = 'ACTIVE'").get(identity.documentValue) as Worker | undefined;
-    }
-  }
+  findByRut(rut: string): Worker | undefined {
+    return getDatabase().prepare('SELECT * FROM workers WHERE rut = ?').get(rut) as Worker | undefined;
+  },
 
-  create(data: CreateWorkerDto): Worker {
-    const db = getDatabase();
-    const stmt = db.prepare(`
-      INSERT INTO workers (name, rut, dni, photo, hourly_rate, start_date)
-      VALUES (@name, @rut, @dni, @photo, @hourly_rate, @start_date)
-    `);
+  findByDni(dni: string): Worker | undefined {
+    return getDatabase().prepare('SELECT * FROM workers WHERE dni = ?').get(dni) as Worker | undefined;
+  },
 
-    try {
-      const info = stmt.run({
-        name: data.name,
-        rut: data.rut || null,
-        dni: data.dni || null,
-        photo: data.photo || null,
-        hourly_rate: data.hourly_rate,
-        start_date: data.start_date
-      });
-      return this.findById(info.lastInsertRowid as number)!;
-    } catch (e: any) {
-      if (e.message && e.message.includes('UNIQUE constraint failed')) {
-        if (e.message.includes('rut')) throw new Error('El RUT ingresado ya está asociado a otro trabajador.');
-        if (e.message.includes('dni')) throw new Error('El DNI ingresado ya está asociado a otro trabajador.');
-        throw new Error('El documento ingresado ya está registrado.');
-      }
-      throw e;
-    }
-  }
+  insert(data: {
+    name: string;
+    rut: string | null;
+    dni: string | null;
+    photo: string | null;
+    hourly_rate: number;
+    start_date: string;
+  }): number {
+    const info = getDatabase()
+      .prepare(
+        `INSERT INTO workers (name, rut, dni, photo, hourly_rate, start_date)
+         VALUES (@name, @rut, @dni, @photo, @hourly_rate, @start_date)`,
+      )
+      .run(data);
+    return info.lastInsertRowid as number;
+  },
 
-  update(id: number, data: UpdateWorkerDto, adminId?: number): Worker | undefined {
-    const worker = this.findById(id);
-    if (!worker) return undefined;
-
-    const db = getDatabase();
-    const updates: string[] = [];
-    const params: any = { id };
-
-    if (data.name !== undefined) { updates.push('name = @name'); params.name = data.name; }
-    if (data.rut !== undefined) { updates.push('rut = @rut'); params.rut = data.rut || null; }
-    if (data.dni !== undefined) { updates.push('dni = @dni'); params.dni = data.dni || null; }
-    if (data.photo !== undefined) { updates.push('photo = @photo'); params.photo = data.photo || null; }
-    if (data.hourly_rate !== undefined) { updates.push('hourly_rate = @hourly_rate'); params.hourly_rate = data.hourly_rate; }
-    if (data.start_date !== undefined) { updates.push('start_date = @start_date'); params.start_date = data.start_date; }
-    if (data.status !== undefined) { updates.push('status = @status'); params.status = data.status; }
-
-    updates.push("updated_at = datetime('now', 'localtime')");
-
-    if (adminId) {
-      updates.push('updated_by = @adminId');
-      params.adminId = adminId;
-    }
-
-    if (updates.length > 0) {
-      const sql = `UPDATE workers SET ${updates.join(', ')} WHERE id = @id`;
-      const stmt = db.prepare(sql);
-      try {
-        stmt.run(params);
-      } catch (e: any) {
-        if (e.message && e.message.includes('UNIQUE constraint failed')) {
-          if (e.message.includes('rut')) throw new Error('El RUT ingresado ya está asociado a otro trabajador.');
-          if (e.message.includes('dni')) throw new Error('El DNI ingresado ya está asociado a otro trabajador.');
-          throw new Error('El documento ingresado ya está registrado.');
-        }
-        throw e;
+  /** Actualiza solo los campos presentes. Registra el admin que modificó (traza). */
+  update(id: number, fields: Partial<Worker>, adminId: number | null): void {
+    const allowed = ['name', 'rut', 'dni', 'photo', 'hourly_rate', 'start_date', 'status'] as const;
+    const sets: string[] = [];
+    const params: Record<string, unknown> = { id };
+    for (const key of allowed) {
+      if (fields[key] !== undefined) {
+        sets.push(`${key} = @${key}`);
+        params[key] = fields[key];
       }
     }
+    sets.push("updated_at = datetime('now', 'localtime')");
+    sets.push('updated_by = @adminId');
+    params.adminId = adminId;
+    getDatabase().prepare(`UPDATE workers SET ${sets.join(', ')} WHERE id = @id`).run(params);
+  },
 
-    return this.findById(id);
-  }
+  setStatus(id: number, status: WorkerStatus, adminId: number | null): void {
+    getDatabase()
+      .prepare(
+        `UPDATE workers SET status = ?, updated_at = datetime('now', 'localtime'), updated_by = ? WHERE id = ?`,
+      )
+      .run(status, adminId, id);
+  },
 
-  changeStatus(id: number, status: WorkerStatus, adminId?: number): boolean {
-    const worker = this.findById(id);
-    if (!worker) return false;
+  /** Borrado físico del trabajador (los hijos financieros se borran explícitamente en el servicio). */
+  deleteWorker(id: number): void {
+    getDatabase().prepare('DELETE FROM workers WHERE id = ?').run(id);
+  },
 
-    const db = getDatabase();
-    const stmt = db.prepare(`
-      UPDATE workers
-      SET status = ?, updated_at = datetime('now', 'localtime'), updated_by = ?
-      WHERE id = ?
-    `);
-    stmt.run(status, adminId || null, id);
-    return true;
-  }
+  // ── Historial de tarifa ─────────────────────────────────
+  insertRate(workerId: number, hourlyRate: number, effectiveFrom: string): void {
+    getDatabase()
+      .prepare(
+        `INSERT INTO worker_rate_history (worker_id, hourly_rate, effective_from)
+         VALUES (?, ?, ?)`,
+      )
+      .run(workerId, hourlyRate, effectiveFrom);
+  },
 
-  hardDelete(id: number): boolean {
-    const worker = this.findById(id);
-    if (!worker) return false;
-
-    const db = getDatabase();
-
-    const deleteTransaction = db.transaction(() => {
-      db.prepare("DELETE FROM attendance_records WHERE worker_id = ?").run(id);
-      db.prepare("DELETE FROM workers WHERE id = ?").run(id);
-    });
-
-    deleteTransaction();
-    return true;
-  }
-}
-
-export const workerRepository = new WorkerRepository();
+  /** Tarifa vigente en una fecha: la de mayor effective_from <= date. */
+  getRateForDate(workerId: number, date: string): number | undefined {
+    const row = getDatabase()
+      .prepare(
+        `SELECT hourly_rate FROM worker_rate_history
+         WHERE worker_id = ? AND effective_from <= ?
+         ORDER BY effective_from DESC, id DESC LIMIT 1`,
+      )
+      .get(workerId, date) as { hourly_rate: number } | undefined;
+    return row?.hourly_rate;
+  },
+};

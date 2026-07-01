@@ -42,9 +42,7 @@
       <!-- Info del Usuario Fija Abajo -->
       <div class="p-4 border-t border-surface-border m-4 mt-0 bg-surface-muted rounded-xl shadow-sm">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold shadow-inner">
-            {{ username.charAt(0).toUpperCase() }}
-          </div>
+          <Avatar :name="username" size="md" />
           <div class="flex-1 min-w-0">
             <p class="text-sm font-bold text-text-base truncate">{{ username }}</p>
             <p class="text-xs text-success font-medium truncate flex items-center gap-1">
@@ -129,6 +127,7 @@
 import { ref, computed, watchEffect, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAdminStore } from '../../stores/adminStore'
+import { Avatar } from '../../components/ui'
 
 const router = useRouter()
 const route = useRoute()

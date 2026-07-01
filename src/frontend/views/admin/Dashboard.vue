@@ -1,12 +1,17 @@
 <template>
   <div class="flex flex-col space-y-6 h-full p-6">
     <!-- Encabezado -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div>
-        <h2 class="text-3xl font-extrabold text-text-base">Panel Principal</h2>
-        <p class="text-text-muted mt-1">Resumen general y estadísticas rápidas de hoy.</p>
-      </div>
-    </div>
+    <PageHeader title="Panel Principal" subtitle="Resumen general y estadísticas rápidas de hoy.">
+      <template #actions>
+        <div class="text-right">
+          <p class="text-xs font-bold text-text-muted uppercase tracking-wider">Bruto del Mes</p>
+          <p class="text-2xl font-black text-text-base tracking-tight">{{ monthGrossLabel }}</p>
+        </div>
+      </template>
+    </PageHeader>
+
+    <!-- Alerta de error de carga -->
+    <BaseAlert v-if="pageError" type="error" :message="pageError" />
 
     <!-- Indicadores KPI de Negocio (Cards A/C style) -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -66,9 +71,7 @@
         </div>
         <div class="p-0 overflow-y-auto">
           <!-- Si no hay loading ni datos -->
-          <div v-if="!loading && todayAttendancesList.length === 0" class="p-8 text-center text-text-muted italic">
-            No hay marcajes para hoy
-          </div>
+          <EmptyState v-if="!loading && todayAttendancesList.length === 0" message="No hay marcajes para hoy" />
           
           <div 
             v-for="(rec, index) in todayAttendancesList" 
@@ -76,11 +79,7 @@
             class="flex items-center justify-between p-4 border-b border-surface-border last:border-b-0 hover:bg-surface-hover/50 transition-colors"
           >
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold" 
-                   :class="rec.status === 'CLOSED' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-warning/20 text-warning'"
-              >
-                {{ rec.worker_name ? rec.worker_name.charAt(0) : '?' }}
-              </div>
+              <Avatar :name="rec.worker_name" :color="rec.status === 'CLOSED' ? 'success' : 'warning'" />
               <div>
                 <p class="font-bold text-sm text-text-base">{{ rec.worker_name }}</p>
                 <p class="text-xs text-text-muted mt-0.5">{{ formatDateLocale(rec.date) }}</p>
@@ -129,9 +128,7 @@
             class="flex items-center justify-between p-4 border-b border-surface-border last:border-b-0 hover:bg-danger/10 transition-colors"
           >
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold bg-danger/20 text-danger">
-                {{ rec.worker_name ? rec.worker_name.charAt(0) : '?' }}
-              </div>
+              <Avatar :name="rec.worker_name" color="danger" />
               <div>
                 <p class="font-bold text-sm text-text-base">{{ rec.worker_name }}</p>
                 <p class="text-xs text-danger font-medium mt-0.5">{{ formatDateLocale(rec.date) }} • {{ rec.entry_time }}</p>
@@ -179,30 +176,62 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import BaseCard from '../../components/ui/BaseCard.vue';
-import BaseModal from '../../components/ui/BaseModal.vue';
-import BaseInput from '../../components/ui/BaseInput.vue';
-import BaseButton from '../../components/ui/BaseButton.vue';
-import BaseAlert from '../../components/ui/BaseAlert.vue';
-import { WorkerChannels, AttendanceChannels } from '../../../shared/types/ipc';
+import {
+  BaseCard,
+  BaseModal,
+  BaseInput,
+  BaseButton,
+  BaseAlert,
+  PageHeader,
+  Avatar,
+  EmptyState,
+} from '../../components/ui';
+import { api } from '../../api';
+import { useAdminStore } from '../../stores/adminStore';
+import type { AttendanceRecord, DashboardStats } from '@shared/types';
+import { formatCLP } from '@shared/utils/money';
+import { isCurrentMonth as isCurrentMonthTz } from '@shared/utils/date';
 
 const router = useRouter();
+const adminStore = useAdminStore();
+
 const loading = ref(true);
-const localWorkers = ref<any[]>([]);
-const localAttendances = ref<any[]>([]);
+const pageError = ref('');
+
+// KPIs calculados por el backend
+const stats = ref<DashboardStats>({
+  today_active_shifts: 0,
+  today_closed_shifts: 0,
+  missing_exits: 0,
+  month_gross: 0,
+});
+// Denominador de la tarjeta de asistencia (plantilla activa)
+const activeWorkersCount = ref(0);
+// Listas de detalle
+const todayAttendancesList = ref<AttendanceRecord[]>([]);
+const missingExitsList = ref<AttendanceRecord[]>([]);
+
+// Fecha de hoy en la zona del negocio (America/Santiago)
+const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Santiago' });
 
 // Data loading
 const loadDashboardData = async () => {
   loading.value = true;
+  pageError.value = '';
   try {
-    const [workersData, attendanceData] = await Promise.all([
-      window.electron.invoke(WorkerChannels.GET_ALL).catch(() => []),
-      window.electron.invoke(AttendanceChannels.GET_ALL).catch(() => [])
+    const [dashboard, activeWorkers, allRecords, missing] = await Promise.all([
+      api.report.dashboard(),
+      api.workers.getActive(),
+      api.attendance.getAll(),
+      api.attendance.getMissing(),
     ]);
 
-    localWorkers.value = workersData || [];
-    localAttendances.value = attendanceData || [];
-  } catch (error) {
+    stats.value = dashboard;
+    activeWorkersCount.value = activeWorkers.length;
+    todayAttendancesList.value = allRecords.filter((a) => a.date === todayStr);
+    missingExitsList.value = missing;
+  } catch (error: any) {
+    pageError.value = error?.message || 'Error al cargar los datos del panel';
     console.error('Error fetching dashboard metrics', error);
   } finally {
     loading.value = false;
@@ -213,20 +242,14 @@ onMounted(() => {
   loadDashboardData();
 });
 
-// Computed Metrics
-const countActiveWorkers = computed(() => {
-  return localWorkers.value.filter(w => w.status === 'ACTIVE').length;
-});
-
-const todayStr = new Date().toLocaleDateString('sv-SE', {timeZone: 'America/Santiago'});
-
-const countTodayAttendances = computed(() => {
-  return localAttendances.value.filter(a => a.date === todayStr).length;
-});
-
-const countOpenShifts = computed(() => {
-  return localAttendances.value.filter(a => a.status === 'OPEN').length;
-});
+// Métricas derivadas de los KPIs del backend
+const countTodayAttendances = computed(
+  () => stats.value.today_active_shifts + stats.value.today_closed_shifts,
+);
+const countActiveWorkers = computed(() => activeWorkersCount.value);
+const countOpenShifts = computed(() => stats.value.today_active_shifts);
+const countMissingExits = computed(() => stats.value.missing_exits);
+const monthGrossLabel = computed(() => formatCLP(stats.value.month_gross));
 
 const percentPresent = computed(() => {
   const total = countActiveWorkers.value;
@@ -235,48 +258,13 @@ const percentPresent = computed(() => {
   return Math.round((present / total) * 100);
 });
 
-// Anomalías (ahora enfocado en Faltantes por marcar Salida)
-const countAnomalies = computed(() => {
-  return localAttendances.value.filter(a => a.status === 'OPEN' && a.date < todayStr).length;
-});
-
 const goToAnomalies = () => {
-  // router.push('/admin/historial?filter=anomalies');
   router.push('/admin/historial');
-};
-
-const countMissingExits = computed(() => countAnomalies.value);
-
-const sumTotalHours = computed(() => {
-  // Sólo calcula sobre los CLOSED (este cálculo podría delegarse al backend luego)
-  let sum = 0;
-  localAttendances.value.forEach(a => {
-    if (a.worked_minutes !== null && a.worked_minutes !== undefined) {
-      sum += Number(a.worked_minutes) / 60;
-    }
-  });
-  return sum.toFixed(1);
-});
-
-// Tablas parciales
-const todayAttendancesList = computed(() => {
-  return localAttendances.value.filter(a => a.date === todayStr);
-});
-
-const missingExitsList = computed(() => {
-  return localAttendances.value.filter(a => a.status === 'OPEN' && a.date < todayStr);
-});
-
-// Format Utils
-const getTodayDate = () => {
-  return new Intl.DateTimeFormat('es-CL', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-  }).format(new Date());
 };
 
 const formatDateLocale = (isoStr: string) => {
   if (!isoStr) return '';
-  const [year, month, day] = isoStr.split('-');
+  const [, month, day] = isoStr.split('-');
   return `${day}/${month}`;
 };
 // ================= EDITAR REGISTRO =================
@@ -293,16 +281,14 @@ const editData = ref({
 
 const isCurrentMonth = (dateStr: string) => {
   if (!dateStr) return false;
-  const current = new Date();
-  const currentMonthStr = current.getFullYear() + '-' + String(current.getMonth() + 1).padStart(2, '0');
-  return dateStr.startsWith(currentMonthStr);
+  return isCurrentMonthTz(dateStr);
 };
 
-const openEditModal = (row: any) => {
+const openEditModal = (row: AttendanceRecord) => {
   editError.value = '';
   editData.value = {
     id: row.id,
-    worker_name: row.worker_name,
+    worker_name: row.worker_name ?? '',
     date: row.date,
     entry_time: row.entry_time || '',
     exit_time: row.exit_time || ''
@@ -317,21 +303,17 @@ const closeEditModal = () => {
 const submitEdit = async () => {
   editLoading.value = true;
   editError.value = '';
-  
+
   try {
-    const payload = {
+    await api.attendance.updateRecord({
       id: editData.value.id,
       entry_time: editData.value.entry_time,
-      exit_time: editData.value.exit_time || null
-    };
-    
-    const result = await window.electron.invoke(AttendanceChannels.UPDATE_RECORD, payload);
-    if (!result.ok) {
-       throw new Error(result.error);
-    }
-    
+      exit_time: editData.value.exit_time || null,
+      adminId: adminStore.admin?.id ?? undefined,
+    });
+
     closeEditModal();
-    loadDashboardData(); // Refresh main lists
+    await loadDashboardData(); // Refresh main lists
   } catch (e: any) {
     editError.value = e.message || 'Error al actualizar el registro';
   } finally {

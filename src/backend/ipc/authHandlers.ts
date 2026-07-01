@@ -1,30 +1,26 @@
 import { ipcMain } from 'electron';
-import { AuthService } from '../services/authService';
 import { AuthChannels } from '../../shared/types/ipc';
 import { loginSchema, changePasswordSchema } from '../../shared/validators';
+import { authService } from '../services/authService';
+import { ok, fail } from './helpers';
 
-export function registerAuthHandlers() {
-  ipcMain.handle(AuthChannels.LOGIN, async (event, args) => {
+export function registerAuthHandlers(): void {
+  ipcMain.handle(AuthChannels.LOGIN, async (_e, payload) => {
     try {
-      const parsedData = loginSchema.parse(args);
-
-      const user = await AuthService.login(parsedData.username, parsedData.password);
-      return { success: true, user };
-    } catch (error: any) {
-      console.error('[IPC auth:login]', error);
-      return { success: false, error: error.issues ? error.issues[0].message : error.message || 'Error de autenticación' };
+      const { username, password } = loginSchema.parse(payload);
+      return ok(await authService.login(username, password));
+    } catch (e) {
+      return fail(e);
     }
   });
 
-  ipcMain.handle(AuthChannels.CHANGE_PASSWORD, async (event, args) => {
+  ipcMain.handle(AuthChannels.CHANGE_PASSWORD, async (_e, payload) => {
     try {
-      const parsedData = changePasswordSchema.parse(args);
-
-      await AuthService.changePassword(parsedData.username, parsedData.oldPassword, parsedData.newPassword);
-      return { success: true };
-    } catch (error: any) {
-      console.error('[IPC auth:change-password]', error);
-      return { success: false, error: error.issues ? error.issues[0].message : error.message || 'Error al cambiar la contraseña' };
+      const { username, oldPassword, newPassword } = changePasswordSchema.parse(payload);
+      await authService.changePassword(username, oldPassword, newPassword);
+      return ok(true);
+    } catch (e) {
+      return fail(e);
     }
   });
 }

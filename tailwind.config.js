@@ -29,6 +29,7 @@ export default {
         surface: {
           DEFAULT: 'rgb(var(--color-surface) / <alpha-value>)',
           muted: 'rgb(var(--color-surface-muted) / <alpha-value>)',
+          hover: 'rgb(var(--color-surface-hover) / <alpha-value>)',
           border: 'rgb(var(--color-border) / <alpha-value>)'
         },
         text: {

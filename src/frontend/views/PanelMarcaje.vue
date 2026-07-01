@@ -68,28 +68,13 @@
           <form @submit.prevent="handleIdentify" class="w-full space-y-6">
             
             <!-- Selector de Tipo de Documento -->
-            <div class="flex p-1 space-x-1 bg-body rounded-xl border border-surface-border">
-              <button
-                type="button"
-                @click="docType = 'RUT'"
-                :class="[
-                  'w-1/2 py-2 text-sm font-bold rounded-lg transition-all duration-200 select-none',
-                  docType === 'RUT' ? 'bg-surface shadow-sm text-primary border border-surface-border/50' : 'text-text-muted hover:text-text-base border border-transparent'
-                ]"
-              >
-                RUT (Nacional)
-              </button>
-              <button
-                type="button"
-                @click="docType = 'DNI'"
-                :class="[
-                  'w-1/2 py-2 text-sm font-bold rounded-lg transition-all duration-200 select-none',
-                  docType === 'DNI' ? 'bg-surface shadow-sm text-primary border border-surface-border/50' : 'text-text-muted hover:text-text-base border border-transparent'
-                ]"
-              >
-                DNI / Pasaporte
-              </button>
-            </div>
+            <SegmentedToggle
+              v-model="docType"
+              :options="[
+                { value: 'RUT', label: 'RUT (Nacional)' },
+                { value: 'DNI', label: 'DNI / Pasaporte' },
+              ]"
+            />
 
             <div class="relative">
               <BaseInput
@@ -156,10 +141,13 @@
     >
       <div v-if="identifiedWorker" class="flex flex-col gap-6 py-2">
         <div class="text-center">
-          <div class="inline-flex w-24 h-24 rounded-full bg-primary/10 border border-primary/20 text-primary items-center justify-center font-bold text-4xl mb-3 overflow-hidden shrink-0 mx-auto shadow-md">
-            <img v-if="identifiedWorker.photo" :src="identifiedWorker.photo" class="w-full h-full object-cover" />
-            <span v-else>{{ identifiedWorker.name.charAt(0).toUpperCase() }}</span>
-          </div>
+          <Avatar
+            :name="identifiedWorker.name"
+            :photo="identifiedWorker.photo"
+            size="xl"
+            color="primary"
+            class="mx-auto mb-3 shadow-md"
+          />
           <h3 class="text-2xl font-extrabold text-text-base leading-tight">{{ identifiedWorker.name }}</h3>
           <p class="text-sm font-medium mt-1 uppercase tracking-wider text-text-muted" v-if="identifiedWorker.rut || identifiedWorker.dni">
             {{ docType }}: <span class="font-mono">{{ identifiedWorker.rut || identifiedWorker.dni }}</span>
@@ -220,6 +208,27 @@
         <p class="text-xl font-bold text-center text-text-base">
           {{ successModalMessage }}
         </p>
+
+        <!-- Resumen del día (solo al cerrar la jornada) -->
+        <div v-if="daySummary" class="mt-5 bg-surface-muted border border-surface-border rounded-xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium text-text-muted uppercase tracking-wide">Tiempo trabajado</span>
+            <span class="text-lg font-black text-text-base tabular-nums">{{ daySummary.worked }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium text-text-muted uppercase tracking-wide">Total del día</span>
+            <span class="text-lg font-black text-primary tabular-nums">{{ daySummary.payment }}</span>
+          </div>
+          <div v-if="daySummary.overtimeMinutes > 0" class="flex items-center justify-between">
+            <span class="text-sm font-medium text-text-muted uppercase tracking-wide">Horas extra</span>
+            <span class="text-base font-bold text-text-base tabular-nums">{{ formatDuration(daySummary.overtimeMinutes) }}</span>
+          </div>
+          <div v-if="daySummary.delayMinutes > 0" class="flex items-center justify-between">
+            <span class="text-sm font-medium text-text-muted uppercase tracking-wide">Atraso</span>
+            <span class="text-base font-bold text-text-base tabular-nums">{{ formatDuration(daySummary.delayMinutes) }}</span>
+          </div>
+        </div>
+
         <p class="text-center text-sm mt-3 text-text-muted animate-pulse">Cerrando automáticamente...</p>
       </div>
     </BaseModal>
@@ -235,6 +244,11 @@ import BaseButton from '../components/ui/BaseButton.vue'
 import BaseInput from '../components/ui/BaseInput.vue'
 import BaseModal from '../components/ui/BaseModal.vue'
 import BaseAlert from '../components/ui/BaseAlert.vue'
+import { Avatar, SegmentedToggle } from '../components/ui'
+import { api } from '../api'
+import type { Worker, AttendanceRecord } from '@shared/types'
+import { formatCLP } from '@shared/utils/money'
+import { formatDuration } from '@shared/utils/time'
 
 const router = useRouter()
 
@@ -353,15 +367,12 @@ const handleIdentify = async () => {
   isLoading.value = true
 
   try {
-    // Usamos el string explícito para evitar problemas de transpilar enums en Vite SSR/Front
-    const response = await window.electron.invoke('worker:identify', {
+    const result = await api.workers.identify({
       documentType: docType.value,
-      documentValue: finalDoc
+      documentValue: finalDoc,
     });
 
-    isLoading.value = false;
-
-    if (!response.found) {
+    if (!result.found || !result.worker) {
       showErrorModal(
         'Trabajador No Encontrado',
         `No existe ningún registro asociado al ${docType.value}: ${doc}. Consulta con administración si eres un empleado nuevo.`
@@ -370,8 +381,8 @@ const handleIdentify = async () => {
       return;
     }
 
-    const worker = response.worker;
-    
+    const worker = result.worker;
+
     if (worker.status !== 'ACTIVE') {
       showErrorModal(
         'Acceso Restringido',
@@ -382,9 +393,10 @@ const handleIdentify = async () => {
     }
 
     // 4. Verificar el estado actual de asistencia del trabajador para hoy
-    const attendance = await window.electron.invoke('attendance:check-today', worker.id);
+    const status = await api.attendance.checkToday(worker.id);
 
-    if (attendance && attendance.status === 'CLOSED') {
+    // Jornada ya cerrada: tiene registro pero no puede marcar ni entrada ni salida.
+    if (status.hasRecord && !status.canMarkEntry && !status.canMarkExit) {
       showErrorModal(
         'Jornada Completada',
         `El trabajador ${worker.name} ya registró su entrada y salida completas por el día de hoy.`
@@ -394,26 +406,36 @@ const handleIdentify = async () => {
     }
 
     identifiedWorker.value = worker;
-    currentAttendance.value = attendance || null;
+    // Si puede marcar salida, hay un turno abierto que exponemos como registro actual.
+    currentAttendance.value = status.canMarkExit ? status.record ?? null : null;
     isActionModalOpen.value = true;
     breakMinutes.value = 0; // reset
     documentNumber.value = ''; // Clean input
-    
   } catch (error: any) {
+    showErrorModal('Error del Sistema', 'Ocurrió un error al conectar con la base de datos: ' + (error?.message ?? ''));
+  } finally {
     isLoading.value = false;
-    showErrorModal('Error del Sistema', 'Ocurrió un error al conectar con la base de datos: ' + error.message);
   }
 }
 
 // ================= ACCIONES DE ASISTENCIA (MODAL) =================
-const identifiedWorker = ref<any>(null);
-const currentAttendance = ref<any>(null);
+const identifiedWorker = ref<Worker | null>(null);
+const currentAttendance = ref<AttendanceRecord | null>(null);
 const isActionModalOpen = ref(false);
 const breakMinutes = ref(0); // 0 o 30
 const actionLoading = ref(false);
 
 const isSuccessModalOpen = ref(false);
 const successModalMessage = ref('');
+
+// Resumen del día que se muestra tras cerrar la jornada (marcar salida).
+interface DaySummary {
+  worked: string;   // formatDuration(worked_minutes)
+  payment: string;  // formatCLP(daily_payment)
+  overtimeMinutes: number;
+  delayMinutes: number;
+}
+const daySummary = ref<DaySummary | null>(null);
 
 const closeActionModal = () => {
   if (actionLoading.value) return;
@@ -425,37 +447,51 @@ const closeActionModal = () => {
 const submitAttendance = async () => {
   if (!identifiedWorker.value) return;
 
+  const workerName = identifiedWorker.value.name;
   actionLoading.value = true;
 
   try {
     if (currentAttendance.value) {
-      // Marcar Salida
-      await window.electron.invoke('attendance:mark-exit', {
+      // Marcar Salida — el registro devuelto ya trae el resumen del día.
+      const record = await api.attendance.markExit({
         id: currentAttendance.value.id,
-        break_minutes: breakMinutes.value
+        break_minutes: breakMinutes.value,
       });
-      showSuccessFeedback(`Salida registrada correctamente para ${identifiedWorker.value.name}.`);
+      actionLoading.value = false;
+      closeActionModal();
+      showSuccessFeedback(`Salida registrada correctamente para ${workerName}.`, record);
     } else {
       // Marcar Entrada
-      await window.electron.invoke('attendance:mark-entry', {
-        worker_id: identifiedWorker.value.id
+      await api.attendance.markEntry({
+        worker_id: identifiedWorker.value.id,
       });
-      showSuccessFeedback(`Entrada registrada correctamente para ${identifiedWorker.value.name}.`);
+      actionLoading.value = false;
+      closeActionModal();
+      showSuccessFeedback(`Entrada registrada correctamente para ${workerName}.`);
     }
   } catch (error: any) {
-    showErrorModal('Error al registrar', error.message || 'No se pudo guardar la asistencia.');
-  } finally {
     actionLoading.value = false;
-    closeActionModal();
+    showErrorModal('Error al registrar', error?.message || 'No se pudo guardar la asistencia.');
   }
 }
 
-const showSuccessFeedback = (msg: string) => {
+const showSuccessFeedback = (msg: string, record?: AttendanceRecord) => {
   successModalMessage.value = msg;
+  // Armamos el resumen del día a partir del registro devuelto (solo al marcar salida).
+  daySummary.value =
+    record && record.worked_minutes != null
+      ? {
+          worked: formatDuration(record.worked_minutes),
+          payment: formatCLP(record.daily_payment ?? 0),
+          overtimeMinutes: record.overtime_minutes,
+          delayMinutes: record.delay_minutes,
+        }
+      : null;
   isSuccessModalOpen.value = true;
   documentNumber.value = '';
   setTimeout(() => {
     isSuccessModalOpen.value = false;
+    daySummary.value = null;
     document.getElementById('document')?.focus();
   }, 2500); // 2.5 segundos y se cierra solo
 }

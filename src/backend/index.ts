@@ -11,27 +11,13 @@ import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { initDatabase, closeDatabase } from './database/connection'
+import { authService } from './services/authService'
+import { configService } from './services/configService'
 import { registerAuthHandlers } from './ipc/authHandlers'
-import { setupWorkerHandlers } from './ipc/workerHandlers'
-import { AuthService } from './services/authService'
-import { setupAttendanceHandlers } from './ipc/attendanceHandlers'
+import { registerWorkerHandlers } from './ipc/workerHandlers'
+import { registerAttendanceHandlers } from './ipc/attendanceHandlers'
 import { registerConfigHandlers } from './ipc/configHandlers'
-
-import * as fsLog from 'fs';
-import * as pathLog from 'path';
-setTimeout(() => {
-  try {
-    const logFile = pathLog.join(app.getPath('userData'), 'diag.log');
-    fsLog.writeFileSync(logFile, '[START]\n');
-    const oErr = console.error.bind(console);
-    console.error = (...args) => {
-      fsLog.appendFileSync(logFile, '[ERR] ' + args.join(' ') + '\n');
-      oErr(...args);
-    };
-    process.on('uncaughtException', e => fsLog.appendFileSync(logFile, '[FATAL] ' + (e.stack||e) + '\n'));
-  } catch(e){}
-}, Number(100));
-
+import { registerReportHandlers } from './ipc/reportHandlers'
 
 process.on('uncaughtException', (error) => {
   console.error('[App] Excepción no atrapada:', error)
@@ -110,14 +96,12 @@ app.whenReady().then(async () => {
     // optimizer.watchWindowShortcuts(window)
   })
 
-  // Inicializar base de datos
+  // Inicializar base de datos + datos base
   try {
-    await initDatabase()
-    console.log('[App] Base de datos inicializada')
-    
-    // Asegurar que el usuario administrador inicial existe
-    await AuthService.ensureDefaultAdmin()
-    console.log('[App] Auth asegurado')
+    initDatabase()
+    configService.ensureInitialConfig()
+    await authService.ensureDefaultAdmin()
+    console.log('[App] Base de datos y datos base listos')
   } catch (error) {
     console.error('[App] Error al inicializar:', error)
     app.quit()
@@ -126,12 +110,10 @@ app.whenReady().then(async () => {
 
   // Registrar handlers IPC
   registerAuthHandlers()
-  setupWorkerHandlers()
-  setupAttendanceHandlers()
+  registerWorkerHandlers()
+  registerAttendanceHandlers()
   registerConfigHandlers()
-  
-  // TODO: Registrar handlers IPC aquí
-  // registerReportHandlers()
+  registerReportHandlers()
 
   // Crear ventana principal
   try {

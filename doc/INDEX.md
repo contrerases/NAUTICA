@@ -54,8 +54,8 @@ Setup, estructura, scripts, configuración de TypeScript, comunicación IPC.
 
 ---
 
-### 4. **DIRECTORIO_PROYECTO.md** - Estructura Planeada
-Árbol completo de directorios y archivos del proyecto (para referencia).
+### 4. **DIRECTORIO_PROYECTO.md** - Estructura Real
+Árbol completo de directorios y archivos del proyecto, sincronizado con el código.
 
 ---
 
@@ -72,10 +72,10 @@ Para nuevos desarrolladores:
 
 ## 📝 Actualizaciones Importantes
 
-- **Última actualización:** 2026-04-01
-- **Versión:** v0.1 en progreso
-- **Base de datos:** Schema completo con snapshots históricos
-- **Dependencias:** sql.js + bcryptjs (sin compilación nativa)
+- **Última actualización:** 2026-06-29
+- **Versión:** v0.1 funcional (marcaje, CRUD, historial, finanzas, configuración)
+- **Base de datos:** Schema completo con snapshots históricos + adelantos
+- **Dependencias:** Electron 34 · better-sqlite3 12.8 · bcryptjs · Zod · ExcelJS
 
 ---
 

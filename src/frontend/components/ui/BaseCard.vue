@@ -12,7 +12,7 @@
       </slot>
     </div>
     
-    <div :class="['flex-1', noPadding ? '' : 'p-6']">
+    <div :class="['flex-1 min-h-0', paddingClass]">
       <slot></slot>
     </div>
 
@@ -23,9 +23,25 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+import { computed } from 'vue';
+
+const props = withDefaults(defineProps<{
   title?: string;
   subtitle?: string;
+  /** Nivel de padding del cuerpo. 'none' lo usan las tarjetas que contienen tablas. */
+  padding?: 'none' | 'sm' | 'base' | 'lg';
+  /** @deprecated usar padding="none" */
   noPadding?: boolean;
-}>();
+}>(), {
+  padding: 'base',
+});
+
+const paddingMap = {
+  none: '',
+  sm: 'p-4',
+  base: 'p-6',
+  lg: 'p-8',
+};
+
+const paddingClass = computed(() => (props.noPadding ? '' : paddingMap[props.padding]));
 </script>

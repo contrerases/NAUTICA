@@ -1,310 +1,141 @@
 import { getDatabase } from '../database/connection';
-import type { AttendanceRecord, CreateEntryDto, UpdateExitDto, CheckAttendanceResult } from '../../shared/types/attendance';
-import { AppConfigRepository } from './appConfigRepository';
-import { workerRepository } from './workerRepository';
-import { format } from 'date-fns';
+import type { AttendanceRecord } from '../../shared/types/attendance';
 
-export class AttendanceRepository {
-  updateRecord(id: number, data: { entry_time: string, exit_time?: string | null, break_minutes?: number }): import('../../shared/types/attendance').AttendanceRecord {
-    const record = this.getOne('SELECT * FROM attendance_records WHERE id = ?', [id]);
-    if (!record) throw new Error('Registro no encontrado');
+/** Acceso a datos de asistencia. Solo SQL: el cálculo vive en WorkdayService. */
 
-    const currentMonth = format(new Date(), 'yyyy-MM');
-    if (!record.date.startsWith(currentMonth)) {
-      throw new Error('Solo se pueden modificar registros del mes en curso');
-    }
-
-    // 1. Recalcular delay_minutes
-    const startParts = record.start_hour_snap.split(':').map(Number);
-    const startMins = startParts[0] * 60 + startParts[1];
-
-    const entryParts = data.entry_time.split(':').map(Number);
-    const rawEntryMins = entryParts[0] * 60 + entryParts[1];
-
-    let effEntryMins = rawEntryMins;
-    if (rawEntryMins > startMins && rawEntryMins <= (startMins + record.tolerance_mins_snap)) {
-      effEntryMins = startMins;
-    }
-
-    let delayMins = effEntryMins > startMins ? effEntryMins - startMins : 0;
-    if (delayMins > 0) {
-      delayMins = effEntryMins - (startMins + record.tolerance_mins_snap);
-      if (delayMins < 0) delayMins = 0;
-    }
-
-    const exit_time = data.exit_time !== undefined ? data.exit_time : record.exit_time;
-
-    const db = getDatabase();
-
-    if (!exit_time) {
-      const sql = `
-        UPDATE attendance_records
-        SET entry_time = @entry_time, exit_time = NULL, status = 'OPEN', delay_minutes = @delay_minutes,
-            worked_minutes = 0, overtime_minutes = 0, overtime_payment = 0, daily_payment = 0
-        WHERE id = @id
-      `;
-      db.prepare(sql).run({ entry_time: data.entry_time, delay_minutes: delayMins, id });
-    } else {
-      // 2. Recalcular salida
-      let entryMinsCalc = effEntryMins;
-      if (entryMinsCalc < startMins) {
-        entryMinsCalc = startMins;
-      }
-
-      const exitParts = exit_time.split(':').map(Number);
-      let exitMins = exitParts[0] * 60 + exitParts[1];
-
-      const exitTolerance = record.exit_tolerance_mins_snap || 15;
-      if (record.exit_hour_snap) {
-          const officialExitParts = record.exit_hour_snap.split(':').map(Number);
-          const officialExitMins = officialExitParts[0] * 60 + officialExitParts[1];
-          if (exitMins < officialExitMins && exitMins >= (officialExitMins - exitTolerance)) {
-            exitMins = officialExitMins;
-          }
-      }
-
-      const breakMins = data.break_minutes !== undefined ? data.break_minutes : (record.break_minutes || 0);
-      let workedMins = exitMins - entryMinsCalc - breakMins;
-      if (workedMins < 0) workedMins = 0;
-
-      const baseDailyLimitMins = record.base_daily_hours_snap * 60;
-      let overtimeMins = 0;
-      if (workedMins > baseDailyLimitMins) {
-        overtimeMins = workedMins - baseDailyLimitMins;
-      }
-
-      const multiplier = record.overtime_multiplier_snap ?? 1.5;
-      const overtimePayment = (overtimeMins / 60) * (record.hourly_rate_snap * multiplier);
-      const baseWorkedMinsForPay = Math.min(workedMins, baseDailyLimitMins);
-      const basePayment = (baseWorkedMinsForPay / 60) * record.hourly_rate_snap;
-
-      let penaltyPay = 0;
-      if (delayMins > 0) {
-        penaltyPay = (delayMins / 60) * record.hourly_rate_snap;
-      }
-
-      let dailyPayment = basePayment + overtimePayment - penaltyPay;
-      if (dailyPayment < 0) dailyPayment = 0;
-
-      const sql = `
-        UPDATE attendance_records
-        SET entry_time = @entry_time, exit_time = @exit_time, delay_minutes = @delay_minutes, status = 'CLOSED',
-            break_minutes = @break_minutes, worked_minutes = @worked_minutes, overtime_minutes = @overtime_minutes,
-            overtime_payment = @overtime_payment, daily_payment = @daily_payment
-        WHERE id = @id
-      `;
-
-      db.prepare(sql).run({
-        entry_time: data.entry_time,
-        exit_time: exit_time,
-        delay_minutes: delayMins,
-        break_minutes: breakMins,
-        worked_minutes: workedMins,
-        overtime_minutes: overtimeMins,
-        overtime_payment: Math.round(overtimePayment),
-        daily_payment: Math.round(dailyPayment),
-        id: id
-      });
-    }
-
-    return this.getOne('SELECT * FROM attendance_records WHERE id = ?', [id])!;
-  }
-
-  private execAndMap(sql: string, params: any = []): AttendanceRecord[] {
-    const db = getDatabase();
-    return db.prepare(sql).all(...params) as AttendanceRecord[];
-  }
-
-  private getOne(sql: string, params: any = []): AttendanceRecord | undefined {
-    const db = getDatabase();
-    return db.prepare(sql).get(...params) as AttendanceRecord | undefined;
-  }
-
-  getAll(): AttendanceRecord[] {
-    return this.execAndMap(`
-      SELECT a.*, w.name as worker_name
-      FROM attendance_records a
-      JOIN workers w ON a.worker_id = w.id
-      ORDER BY a.date DESC, a.entry_time DESC
-    `);
-  }
-
-  getByWorker(workerId: number): AttendanceRecord[] {
-    return this.execAndMap(`
-      SELECT a.*, w.name as worker_name
-      FROM attendance_records a
-      JOIN workers w ON a.worker_id = w.id
-      WHERE a.worker_id = ?
-      ORDER BY a.date DESC, a.entry_time DESC
-    `, [workerId]);
-  }
-
-  checkToday(workerId: number): CheckAttendanceResult {
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const record = this.getOne('SELECT * FROM attendance_records WHERE worker_id = ? AND date = ?', [workerId, today]);
-    
-    return {
-      hasRecord: !!record,
-      record: record,
-      canMarkEntry: !record,
-      canMarkExit: !!record && record.status === 'OPEN'
-    };
-  }
-
-  getMissingExits(): AttendanceRecord[] {
-    return this.execAndMap(`
-      SELECT a.*, w.name as worker_name
-      FROM attendance_records a
-      JOIN workers w ON a.worker_id = w.id
-      WHERE a.status = 'OPEN' AND w.status = 'ACTIVE'
-      ORDER BY a.date ASC, a.entry_time ASC
-    `);
-  }
-
-  markEntry(data: CreateEntryDto): AttendanceRecord {
-    const config = AppConfigRepository.getConfig();
-    const worker = workerRepository.findById(data.worker_id);
-
-    if (!worker) {
-      throw new Error('Trabajador no encontrado');
-    }
-
-    const startParts = config.startHour.split(':').map(Number);
-    const startMins = startParts[0] * 60 + startParts[1];
-
-    const entryParts = data.entry_time.split(':').map(Number);
-    const entryMins = entryParts[0] * 60 + entryParts[1];
-
-    let effEntryMins = entryMins;
-    if (entryMins > startMins && entryMins <= (startMins + config.toleranceMinutes)) {
-      effEntryMins = startMins;
-    }
-
-    let delayMins = effEntryMins > startMins ? effEntryMins - startMins : 0;
-    if (delayMins > 0) {
-      delayMins = effEntryMins - (startMins + config.toleranceMinutes);
-      if (delayMins < 0) delayMins = 0;
-    }
-
-    const db = getDatabase();
-    const stmt = db.prepare(`
-      INSERT INTO attendance_records (
-        worker_id, date, entry_time,
-        hourly_rate_snap, start_hour_snap, tolerance_mins_snap, exit_tolerance_mins_snap,
-        base_daily_hours_snap, exit_hour_snap, default_break_minutes_snap, overtime_rate_snap, overtime_multiplier_snap,
-        delay_minutes, status, break_minutes, overtime_minutes, overtime_payment
-      ) VALUES (
-        @worker_id, @date, @entry_time,
-        @hourly_rate_snap, @start_hour_snap, @tolerance_mins_snap, @exit_tolerance_mins_snap,
-        @base_daily_hours_snap, @exit_hour_snap, @default_break_minutes_snap, @overtime_rate_snap, @overtime_multiplier_snap,
-        @delay_minutes, 'OPEN', 0, 0, 0
-      )
-    `);
-
-    const info = stmt.run({
-      worker_id: data.worker_id,
-      date: data.date,
-      entry_time: data.entry_time,
-      hourly_rate_snap: worker.hourly_rate,
-      start_hour_snap: config.startHour,
-      tolerance_mins_snap: config.toleranceMinutes,
-      exit_tolerance_mins_snap: config.exitToleranceMinutes || 15,
-      base_daily_hours_snap: config.baseDailyHours,
-      exit_hour_snap: config.exitHour,
-      default_break_minutes_snap: config.defaultBreakMinutes,
-      overtime_rate_snap: config.overtime_rate,
-      overtime_multiplier_snap: config.overtime_multiplier || 1.5,
-      delay_minutes: delayMins
-    });
-
-    return this.getOne('SELECT * FROM attendance_records WHERE id = ?', [info.lastInsertRowid])!;
-  }
-
-  markExit(id: number, data: UpdateExitDto): AttendanceRecord {
-    const record = this.getOne('SELECT * FROM attendance_records WHERE id = ?', [id]);
-    
-    if (!record) {
-      throw new Error('Registro de asistencia no encontrado');
-    }
-    if (record.status === 'CLOSED') {
-      throw new Error('La jornada ya está cerrada');
-    }
-
-    const entryParts = record.entry_time.split(':').map(Number);
-    let entryMins = entryParts[0] * 60 + entryParts[1];
-
-    const startParts = record.start_hour_snap.split(':').map(Number);
-    const startMins = startParts[0] * 60 + startParts[1];
-    if (entryMins > startMins && entryMins <= (startMins + record.tolerance_mins_snap)) {
-      entryMins = startMins;
-    }
-    if (entryMins < startMins) {
-      entryMins = startMins;
-    }
-
-    const exitParts = data.exit_time.split(':').map(Number);
-    let exitMins = exitParts[0] * 60 + exitParts[1];
-
-    const exitTolerance = record.exit_tolerance_mins_snap || 15;
-    if (record.exit_hour_snap) {
-        const officialExitParts = record.exit_hour_snap.split(':').map(Number);
-        const officialExitMins = officialExitParts[0] * 60 + officialExitParts[1];
-        
-        if (exitMins < officialExitMins && exitMins >= (officialExitMins - exitTolerance)) {
-          exitMins = officialExitMins;
-        }
-    }
-
-    const breakMins = data.break_minutes;
-    let workedMins = exitMins - entryMins - breakMins;
-    if (workedMins < 0) workedMins = 0;
-
-    const baseDailyLimitMins = record.base_daily_hours_snap * 60;
-
-    let overtimeMins = 0;
-    if (workedMins > baseDailyLimitMins) {
-      overtimeMins = workedMins - baseDailyLimitMins;
-    }
-
-    // Priorize overtime_multiplier if exists, backwards compatible to fixed rate if multiplier doesn't exist on old snaps
-    const multiplier = record.overtime_multiplier_snap ?? 1.5;
-    const overtimePayment = (overtimeMins / 60) * (record.hourly_rate_snap * multiplier);    
-    const baseWorkedMinsForPay = Math.min(workedMins, baseDailyLimitMins);
-    const basePayment = (baseWorkedMinsForPay / 60) * record.hourly_rate_snap;
-
-    let penaltyPay = 0;
-    if (record.delay_minutes > 0) {
-      penaltyPay = (record.delay_minutes / 60) * record.hourly_rate_snap;
-    }
-
-    let dailyPayment = basePayment + overtimePayment - penaltyPay;
-    if (dailyPayment < 0) dailyPayment = 0;
-
-    const db = getDatabase();
-    const sql = `
-      UPDATE attendance_records
-      SET exit_time = @exit_time,
-          break_minutes = @break_minutes,
-          worked_minutes = @worked_minutes,
-          overtime_minutes = @overtime_minutes,
-          overtime_payment = @overtime_payment,
-          daily_payment = @daily_payment,
-          status = 'CLOSED'
-      WHERE id = @id
-    `;
-
-    db.prepare(sql).run({
-      exit_time: data.exit_time,
-      break_minutes: breakMins,
-      worked_minutes: workedMins,
-      overtime_minutes: overtimeMins,
-      overtime_payment: overtimePayment,
-      daily_payment: dailyPayment,
-      id: id
-    });
-
-    return this.getOne('SELECT * FROM attendance_records WHERE id = ?', [id])!;
-  }
+export interface AttendanceSnapshot {
+  hourly_rate_snap: number;
+  start_hour_snap: string;
+  exit_hour_snap: string;
+  tolerance_snap: number;
+  exit_tolerance_snap: number;
+  base_daily_minutes_snap: number;
+  overtime_multiplier_snap: number;
 }
 
-export const attendanceRepository = new AttendanceRepository();
+export interface CloseFields {
+  exit_time: string;
+  break_minutes: number;
+  worked_minutes: number;
+  base_minutes: number;
+  overtime_minutes: number;
+  base_payment: number;
+  overtime_payment: number;
+  daily_payment: number;
+}
+
+const WITH_NAME = `
+  SELECT a.*, w.name AS worker_name
+  FROM attendance_records a
+  JOIN workers w ON w.id = a.worker_id
+`;
+
+export const attendanceRepository = {
+  findById(id: number): AttendanceRecord | undefined {
+    return getDatabase()
+      .prepare('SELECT * FROM attendance_records WHERE id = ?')
+      .get(id) as AttendanceRecord | undefined;
+  },
+
+  findByWorkerAndDate(workerId: number, date: string): AttendanceRecord | undefined {
+    return getDatabase()
+      .prepare('SELECT * FROM attendance_records WHERE worker_id = ? AND date = ?')
+      .get(workerId, date) as AttendanceRecord | undefined;
+  },
+
+  getAllWithNames(): AttendanceRecord[] {
+    return getDatabase()
+      .prepare(`${WITH_NAME} ORDER BY a.date DESC, a.entry_time DESC`)
+      .all() as AttendanceRecord[];
+  },
+
+  getByWorkerWithNames(workerId: number): AttendanceRecord[] {
+    return getDatabase()
+      .prepare(`${WITH_NAME} WHERE a.worker_id = ? ORDER BY a.date DESC, a.entry_time DESC`)
+      .all(workerId) as AttendanceRecord[];
+  },
+
+  /** Turnos OPEN de días anteriores a `today` (salidas olvidadas), de trabajadores activos. */
+  getMissingExits(today: string): AttendanceRecord[] {
+    return getDatabase()
+      .prepare(
+        `${WITH_NAME} WHERE a.status = 'OPEN' AND a.date < ? AND w.status = 'ACTIVE'
+         ORDER BY a.date ASC, a.entry_time ASC`,
+      )
+      .all(today) as AttendanceRecord[];
+  },
+
+  /** Todos los registros de un mes "YYYY-MM" (cualquier estado). */
+  getByMonthWithNames(month: string): AttendanceRecord[] {
+    return getDatabase()
+      .prepare(`${WITH_NAME} WHERE a.date LIKE ? ORDER BY a.date ASC`)
+      .all(`${month}-%`) as AttendanceRecord[];
+  },
+
+  insertOpen(data: {
+    worker_id: number;
+    date: string;
+    entry_time: string;
+    delay_minutes: number;
+    snap: AttendanceSnapshot;
+  }): number {
+    const info = getDatabase()
+      .prepare(
+        `INSERT INTO attendance_records (
+           worker_id, date, entry_time, status, delay_minutes,
+           hourly_rate_snap, start_hour_snap, exit_hour_snap, tolerance_snap,
+           exit_tolerance_snap, base_daily_minutes_snap, overtime_multiplier_snap
+         ) VALUES (
+           @worker_id, @date, @entry_time, 'OPEN', @delay_minutes,
+           @hourly_rate_snap, @start_hour_snap, @exit_hour_snap, @tolerance_snap,
+           @exit_tolerance_snap, @base_daily_minutes_snap, @overtime_multiplier_snap
+         )`,
+      )
+      .run({
+        worker_id: data.worker_id,
+        date: data.date,
+        entry_time: data.entry_time,
+        delay_minutes: data.delay_minutes,
+        ...data.snap,
+      });
+    return info.lastInsertRowid as number;
+  },
+
+  /** Cierra (o recierra) un registro con los valores ya calculados. */
+  applyClose(id: number, fields: CloseFields, updatedBy: number | null): void {
+    getDatabase()
+      .prepare(
+        `UPDATE attendance_records SET
+           exit_time = @exit_time, break_minutes = @break_minutes,
+           worked_minutes = @worked_minutes, base_minutes = @base_minutes,
+           overtime_minutes = @overtime_minutes, base_payment = @base_payment,
+           overtime_payment = @overtime_payment, daily_payment = @daily_payment,
+           status = 'CLOSED',
+           updated_at = datetime('now', 'localtime'), updated_by = @updatedBy
+         WHERE id = @id`,
+      )
+      .run({ id, updatedBy, ...fields });
+  },
+
+  /** Deja el registro OPEN (sin salida), con la entrada/atraso indicados y montos en 0. */
+  applyReopen(id: number, entryTime: string, delayMinutes: number, updatedBy: number | null): void {
+    getDatabase()
+      .prepare(
+        `UPDATE attendance_records SET
+           entry_time = @entry_time, exit_time = NULL, break_minutes = 0,
+           worked_minutes = NULL, base_minutes = NULL, overtime_minutes = 0,
+           base_payment = 0, overtime_payment = 0, daily_payment = NULL,
+           delay_minutes = @delay_minutes, status = 'OPEN',
+           updated_at = datetime('now', 'localtime'), updated_by = @updatedBy
+         WHERE id = @id`,
+      )
+      .run({ id, entry_time: entryTime, delay_minutes: delayMinutes, updatedBy });
+  },
+
+  hasAny(): boolean {
+    const row = getDatabase().prepare('SELECT COUNT(*) AS c FROM attendance_records').get() as {
+      c: number;
+    };
+    return row.c > 0;
+  },
+};

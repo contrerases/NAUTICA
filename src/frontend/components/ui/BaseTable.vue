@@ -1,12 +1,12 @@
 <template>
-  <div class="overflow-x-auto rounded-lg border border-surface-border bg-surface shadow-sm w-full">
-    <table class="w-full text-left text-sm text-text-base">
-      <thead class="bg-body border-b border-surface-border text-text-muted font-bold uppercase text-xs tracking-wider">
+  <div class="overflow-auto rounded-lg border border-surface-border bg-surface shadow-sm w-full h-full max-h-full scrollbar-thin">
+    <table class="w-full text-left text-sm text-text-base border-separate border-spacing-0">
+      <thead class="sticky top-0 z-10 bg-body text-text-muted font-bold uppercase text-xs tracking-wider">
         <tr>
           <th
             v-for="col in columns"
             :key="col.key"
-            class="px-6 py-4 whitespace-nowrap"
+            class="px-6 py-4 whitespace-nowrap bg-body border-b border-surface-border"
             :class="col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left'"
           >
             {{ col.label }}

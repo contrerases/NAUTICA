@@ -1,55 +1,55 @@
-import { getDatabase } from '../database/connection'
-import type { WorkerAdvance, CreateWorkerAdvanceDto } from '../../shared/types/worker'
+import { getDatabase } from '../database/connection';
+import type { WorkerAdvance, CreateWorkerAdvanceDto } from '../../shared/types/worker';
 
-export class AdvanceRepository {
-  createAdvance(data: CreateWorkerAdvanceDto): WorkerAdvance {
-    const db = getDatabase()
-    const stmt = db.prepare(`
-      INSERT INTO worker_advances (worker_id, amount, date, notes)
-      VALUES (?, ?, ?, ?)
-    `)
-    const result = stmt.run(data.worker_id, data.amount, data.date, data.notes || null)
-    return this.getAdvanceById(result.lastInsertRowid as number)!
-  }
+/** Adelantos de dinero. Solo SQL. */
+export const advanceRepository = {
+  create(data: CreateWorkerAdvanceDto): WorkerAdvance {
+    const info = getDatabase()
+      .prepare(
+        `INSERT INTO worker_advances (worker_id, amount, date, notes) VALUES (?, ?, ?, ?)`,
+      )
+      .run(data.worker_id, data.amount, data.date, data.notes ?? null);
+    return this.getById(info.lastInsertRowid as number)!;
+  },
 
-  getAdvanceById(id: number): WorkerAdvance | null {
-    const db = getDatabase()
-    const stmt = db.prepare('SELECT * FROM worker_advances WHERE id = ?')
-    return stmt.get(id) as WorkerAdvance || null
-  }
+  getById(id: number): WorkerAdvance | undefined {
+    return getDatabase()
+      .prepare('SELECT * FROM worker_advances WHERE id = ?')
+      .get(id) as WorkerAdvance | undefined;
+  },
 
-  getAdvancesByWorkerAndMonth(workerId: number, year: number, month: number): WorkerAdvance[] {
-    const db = getDatabase()
-    const monthStr = month.toString().padStart(2, '0')
-    const pattern = `${year}-${monthStr}-%`
-    
-    const stmt = db.prepare(`
-      SELECT * FROM worker_advances 
-      WHERE worker_id = ? AND date LIKE ? 
-      ORDER BY date DESC, created_at DESC
-    `)
-    return stmt.all(workerId, pattern) as WorkerAdvance[]
-  }
+  delete(id: number): boolean {
+    return getDatabase().prepare('DELETE FROM worker_advances WHERE id = ?').run(id).changes > 0;
+  },
 
-  getAdvancesByMonth(year: number, month: number): WorkerAdvance[] {
-    const db = getDatabase()
-    const monthStr = month.toString().padStart(2, '0')
-    const pattern = `${year}-${monthStr}-%`
-    
-    const stmt = db.prepare(`
-      SELECT * FROM worker_advances 
-      WHERE date LIKE ? 
-      ORDER BY date DESC, created_at DESC
-    `)
-    return stmt.all(pattern) as WorkerAdvance[]
-  }
+  getByWorkerAndMonth(workerId: number, month: string): WorkerAdvance[] {
+    return getDatabase()
+      .prepare(
+        `SELECT * FROM worker_advances WHERE worker_id = ? AND date LIKE ?
+         ORDER BY date DESC, created_at DESC`,
+      )
+      .all(workerId, `${month}-%`) as WorkerAdvance[];
+  },
 
-  deleteAdvance(id: number): boolean {
-    const db = getDatabase()
-    const stmt = db.prepare('DELETE FROM worker_advances WHERE id = ?')
-    const result = stmt.run(id)
-    return result.changes > 0
-  }
-}
+  /** Adelantos del mes con nombre y estado del trabajador (para la liquidación). */
+  getByMonthWithNames(
+    month: string,
+  ): Array<WorkerAdvance & { worker_name: string; worker_status: string }> {
+    return getDatabase()
+      .prepare(
+        `SELECT adv.*, w.name AS worker_name, w.status AS worker_status
+         FROM worker_advances adv
+         JOIN workers w ON w.id = adv.worker_id
+         WHERE adv.date LIKE ?
+         ORDER BY adv.date DESC, adv.created_at DESC`,
+      )
+      .all(`${month}-%`) as Array<WorkerAdvance & { worker_name: string; worker_status: string }>;
+  },
 
-export const advanceRepository = new AdvanceRepository()
+  countByWorker(workerId: number): number {
+    const row = getDatabase()
+      .prepare('SELECT COUNT(*) AS c FROM worker_advances WHERE worker_id = ?')
+      .get(workerId) as { c: number };
+    return row.c;
+  },
+};

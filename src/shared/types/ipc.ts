@@ -1,38 +1,23 @@
-/**
- * Tipos relacionados con IPC (Inter-Process Communication)
- * Define los canales de comunicación entre Main Process y Renderer
- */
+/** Canales IPC tipados (contrato Main ↔ Renderer). */
 
-/**
- * Respuesta estándar de todos los handlers IPC
- */
+/** Respuesta estándar de todos los handlers. */
 export interface IpcResponse<T = unknown> {
-  ok: boolean
-  data?: T
-  error?: string
+  ok: boolean;
+  data?: T;
+  error?: string;
 }
 
-/**
- * Canales de autenticación
- */
 export enum AuthChannels {
   LOGIN = 'auth:login',
-  LOGOUT = 'auth:logout',
   CHANGE_PASSWORD = 'auth:change-password',
-  CHECK_SESSION = 'auth:check-session',
-  CREATE_ADMIN = 'auth:create-admin',
-  DELETE_ADMIN = 'auth:delete-admin',
-  LIST_ADMINS = 'auth:list-admins',
 }
 
-/**
- * Canales de trabajadores
- */
 export enum WorkerChannels {
   CREATE = 'worker:create',
   UPDATE = 'worker:update',
-  DELETE = 'worker:delete',
-  HARD_DELETE = 'worker:hard-delete',
+  DEACTIVATE = 'worker:deactivate', // baja lógica
+  REACTIVATE = 'worker:reactivate',
+  HARD_DELETE = 'worker:hard-delete', // borrado físico explícito
   GET_BY_ID = 'worker:get-by-id',
   GET_ALL = 'worker:get-all',
   GET_ACTIVE = 'worker:get-active',
@@ -44,46 +29,33 @@ export enum WorkerChannels {
   ADVANCE_DELETE = 'worker:advance-delete',
 }
 
-/**
- * Canales de asistencia
- */
 export enum AttendanceChannels {
   GET_ALL = 'attendance:get-all',
-  MARK_ENTRY = 'attendance:mark-entry',
-  MARK_EXIT = 'attendance:mark-exit',
-  CHECK_TODAY = 'attendance:check-today',
   GET_BY_WORKER = 'attendance:get-by-worker',
   GET_BY_PERIOD = 'attendance:get-by-period',
-  GET_PENDING = 'attendance:get-pending',
-  COMPLETE_PENDING = 'attendance:complete-pending',
+  CHECK_TODAY = 'attendance:check-today',
+  MARK_ENTRY = 'attendance:mark-entry',
+  MARK_EXIT = 'attendance:mark-exit',
   UPDATE_RECORD = 'attendance:update-record',
+  CREATE_MANUAL = 'attendance:create-manual',
+  GET_MISSING = 'attendance:get-missing', // OPEN de días anteriores
 }
 
-/**
- * Canales de configuración
- */
 export enum ConfigChannels {
-  GET = 'config:get',
+  GET = 'config:get', // devuelve ConfigView (current + pending)
   UPDATE = 'config:update',
-  COMPLETE_ONBOARDING = 'config:complete-onboarding',
+  CANCEL_PENDING = 'config:cancel-pending',
 }
 
-/**
- * Canales de reportes
- */
 export enum ReportChannels {
-  GET_WORKER_SUMMARY = 'report:worker-summary',
-  GET_PERIOD_REPORT = 'report:period-report',
-  GET_DASHBOARD_STATS = 'report:dashboard-stats',
+  PAYROLL = 'report:payroll', // liquidación del mes
+  DASHBOARD = 'report:dashboard',
   EXPORT_EXCEL = 'report:export-excel',
 }
 
-/**
- * Todos los canales IPC disponibles
- */
 export type AllChannels =
   | AuthChannels
   | WorkerChannels
   | AttendanceChannels
   | ConfigChannels
-  | ReportChannels
+  | ReportChannels;

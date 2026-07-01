@@ -211,13 +211,14 @@ Las funcionalidades están organizadas en **Épicas** que agrupan historias de u
 | Capa | Tecnología | Versión |
 |---|---|---|
 | Lenguaje | TypeScript | ^5.3 |
-| Shell de escritorio | Electron | ^28 |
+| Shell de escritorio | Electron | 34.2 |
 | Build tool | electron-vite | ^2.0 |
 | UI Framework | Vue 3 | ^3.4 |
+| Router / Estado | Vue Router ^4.2 · Pinia ^2.1 | |
 | Estilos | Tailwind CSS | ^3.4 |
-| Estado global | Pinia | ^2.1 |
-| Base de datos | better-sqlite3 | ^9.4 |
-| Hash de contraseñas | bcrypt | ^5.1 |
+| Base de datos | better-sqlite3 | 12.8 |
+| Validación | Zod | ^4.3 |
+| Hash de contraseñas | bcryptjs | ^2.4 |
 | Exportación Excel | ExcelJS | ^4.4 |
 | Empaquetado | electron-builder | ^24 |
 
@@ -318,116 +319,57 @@ El proyecto usa **dos tsconfig** separados:
 
 ## 3. Estructura del Proyecto
 
+El árbol completo está en [DIRECTORIO_PROYECTO.md](DIRECTORIO_PROYECTO.md). Resumen de las capas reales:
+
 ```
-nautica-jornada/
+src/
+├── shared/        ← types/ (contrato IPC tipado) + validators/ (esquemas Zod)
 │
-├── electron.vite.config.ts     ← Configuración de electron-vite (Main + Renderer)
-├── tsconfig.json               ← Raíz (referencias a node y web)
-├── tsconfig.node.json          ← TypeScript para Main Process y Preload
-├── tsconfig.web.json           ← TypeScript para Renderer (Vue)
-├── tailwind.config.js
-├── package.json
-├── index.html                  ← Entry point del Renderer
+├── backend/       ── MAIN PROCESS (Node.js)
+│   ├── index.ts       ← DB, admin por defecto, registro de handlers IPC, ventana
+│   ├── database/      ← connection.ts (better-sqlite3 + migraciones)
+│   ├── repositories/  ← worker, attendance, user, appConfig, advance
+│   │                    (el cálculo de jornada vive en attendanceRepository)
+│   ├── services/      ← authService (login, bcrypt)
+│   └── ipc/           ← auth, worker, attendance, config handlers
 │
-├── resources/
-│   └── icon.ico                ← Ícono de la app (para el instalador)
+├── preload/       ← index.ts (expone window.electron.invoke()/on())
 │
-└── src/
-    │
-    ├── shared/                 ── COMPARTIDO entre Main y Renderer
-    │   └── types/
-    │       ├── index.ts        ← Barrel export (importar desde '@shared/types')
-    │       ├── worker.ts       ← Worker, CreateWorkerDto, UpdateWorkerDto, DocumentType
-    │       ├── attendance.ts   ← AttendanceRecord, DaySummary, AttendanceStatus, filtros
-    │       ├── admin.ts        ← Admin, AdminRecord, LoginDto, LoginResult, AdminSession
-    │       ├── config.ts       ← AppConfig, UpdateConfigDto
-    │       ├── reports.ts      ← WorkerPeriodSummary, ReportRow, ReportFilter, Trend
-    │       └── ipc.ts          ← IpcChannels tipados (contrato Main ↔ Renderer)
-    │
-    ├── main/                   ── MAIN PROCESS (Node.js)
-    │   ├── index.ts            ← Entry point: inicializa DB, servicios, handlers IPC y ventana
-    │   │
-    │   ├── database/
-    │   │   └── connection.ts   ← Conexión SQLite + migraciones automáticas al primer inicio
-    │   │
-    │   ├── repositories/       ← Solo hablan con SQLite. Sin lógica de negocio.
-    │   │   ├── WorkerRepository.ts
-    │   │   ├── AttendanceRepository.ts
-    │   │   ├── AdminRepository.ts
-    │   │   └── ConfigRepository.ts
-    │   │
-    │   ├── services/           ← Toda la lógica de negocio. No conocen ni la UI ni SQLite.
-    │   │   ├── WorkdayService.ts       → Cálculos: horas, pagos, atrasos, validación RUT
-    │   │   ├── AttendanceService.ts    → Orquesta el flujo de marcaje
-    │   │   ├── AuthService.ts          → Login, creación y eliminación de admins
-    │   │   └── ReportService.ts        → Estadísticas, tendencias y exportación Excel
-    │   │
-    │   └── ipc/                ← Handlers IPC. Equivalen a controllers. Sin lógica de negocio.
-    │       ├── attendance.ipc.ts
-    │       ├── workers.ipc.ts
-    │       ├── auth.ipc.ts     ← También contiene handlers de reports y config
-    │       └── (reports.ipc.ts, config.ipc.ts en auth.ipc.ts por ahora)
-    │
-    ├── preload/
-    │   └── index.ts            ← Expone window.electron.invoke() al Renderer de forma segura
-    │
-    └── renderer/               ── RENDERER PROCESS (Vue 3)
-        ├── main.ts             ← Entry point Vue: router, Pinia, App.vue
-        ├── App.vue             ← Componente raíz. Carga config al iniciar.
-        │
-        ├── assets/
-        │   └── main.css        ← Tailwind CSS
-        │
-        ├── stores/             ← Estado verdaderamente global (Pinia)
-        │   ├── adminStore.ts   → Sesión del admin + timeout de expiración automático
-        │   └── configStore.ts  → Configuración de la app (startHour, tolerancia, etc.)
-        │
-        ├── composables/        ← Lógica de UI reutilizable. Llaman IPC, nunca componentes.
-        │   ├── useAttendance.ts → Identificación, marcaje de entrada/salida, resumen
-        │   ├── useAuth.ts       → Login y logout del administrador
-        │   ├── useWorkers.ts    → (por implementar) CRUD de trabajadores
-        │   └── useReports.ts    → (por implementar) Historial y exportación
-        │
-        └── views/              ← Páginas completas del router
-            ├── PanelMarcaje.vue          ← Pantalla principal (kiosk de marcaje)
-            ├── PanelAdmin.vue            ← Shell del panel admin con nav lateral
-            └── admin/
-                ├── Dashboard.vue         ← Resumen del día / semana
-                ├── Trabajadores.vue      ← CRUD de trabajadores
-                ├── Historial.vue         ← Historial filtrable por período
-                ├── Estadisticas.vue      ← Rankings y tendencias
-                └── Configuracion.vue     ← Ajustes de jornada y tolerancia
+└── frontend/      ── RENDERER PROCESS (Vue 3)
+    ├── main.ts · App.vue · router/ · stores/ (adminStore, configStore)
+    ├── components/ui/  ← BaseButton, BaseModal, BaseTable, BaseAlert, … 
+    └── views/          ← PanelMarcaje, LoginAdmin y admin/
+                          (PanelAdmin, Dashboard, Trabajadores, Historial,
+                           Finanzas, Configuracion)
 ```
+
+> **Notas de arquitectura (estado real):**
+> - El cálculo de jornada y pago está implementado dentro de los **repositorios**
+>   (`attendanceRepository.ts`), no en servicios `WorkdayService`/`ReportService`.
+> - No existen `composables/`: las vistas llaman IPC directamente o vía stores.
+> - Los handlers de reportes/exportación (`ReportChannels`) aún **no** están
+>   registrados en `backend/index.ts`.
 
 ---
 
 ### Flujo de datos entre capas
 
 ```
-[Vista Vue]
-    │  llama a composable
-    ▼
-[Composable]
+[Vista Vue] (o store Pinia)
     │  window.electron.invoke('canal:accion', payload)
     ▼  ── cruce IPC ──────────────────────────────────
-[IPC Handler]
-    │  llama a Service
+[IPC Handler]  (valida payload con Zod)
+    │  llama al Repository
     ▼
-[Service]
-    │  llama a Repository
-    ▼
-[Repository]
+[Repository]  (query SQL + cálculo de jornada)
     │  query SQL
     ▼
 [SQLite]
     │  resultado
     ▼
-[Repository] → [Service] → [IPC Handler]
-    │  retorna { ok: true, data: ... }
+[Repository] → [IPC Handler]
+    │  retorna el dato (o { ok, data, error })
     ▼  ── cruce IPC ──────────────────────────────────
-[Composable]
-    │  actualiza ref reactivo
-    ▼
 [Vista Vue] → UI se actualiza reactivamente
 ```
 
@@ -440,35 +382,36 @@ nautica-jornada/
 ### Diagrama de relaciones
 
 ```
-┌──────────────┐        ┌───────────────────────┐
-│    users     │        │   attendance_records   │
-│ (admins)     │        │                       │
-├──────────────┤        ├───────────────────────┤
-│ id           │        │ id                    │
-│ username     │        │ worker_id  ───────────┼──┐
-│ password_hash│        │ date                  │  │
-│ created_at   │        │ entry_time            │  │
-└──────────────┘        │ exit_time             │  │
-                        │ break_minutes         │  │
-┌──────────────┐        │ break_start_time      │  │
-│  app_config  │        │ worked_minutes        │  │
-│ (fila única) │        │ overtime_minutes      │  │
-├──────────────┤        │ daily_payment         │  │
-│ id = 1       │        │ delay_minutes         │  │
-│ start_hour   │        │ created_at            │  │
-│ tolerance_min│        └───────────────────────┘  │
-│ manual_break │                                    │
-│ base_daily_h │        ┌───────────────────────┐  │
-└──────────────┘        │       workers         │  │
-                        ├───────────────────────┤  │
-                        │ id  ◄─────────────────┼──┘
-                        │ name                  │
-                        │ rut          nullable │
-                        │ dni          nullable │
-                        │ hourly_rate           │
-                        │ start_date            │
-                        │ status                │
-                        └───────────────────────┘
+┌──────────────┐        ┌────────────────────────────┐
+│    users     │        │     attendance_records      │
+│ (admins)     │        ├────────────────────────────┤
+├──────────────┤        │ id                         │
+│ id           │        │ worker_id  ────────────────┼──┐
+│ username     │        │ date · entry_time · exit_time │ │
+│ password_hash│        │ *_snap (hourly_rate, start, │  │
+│ created_at   │        │   tolerance, exit, base,    │  │
+└──────────────┘        │   overtime_multiplier, …)   │  │
+                        │ break_minutes               │  │
+┌──────────────┐        │ worked_minutes              │  │
+│  app_config  │        │ overtime_minutes/payment    │  │
+│ (fila única) │        │ daily_payment · delay_minutes │ │
+├──────────────┤        │ status (OPEN/CLOSED/PENDING)│  │
+│ id = 1       │        │ created_at                  │  │
+│ start_hour   │        └────────────────────────────┘  │
+│ exit_hour    │                                          │
+│ base_daily_h │        ┌────────────────────────────┐  │
+│ tolerance_*  │        │          workers           │  │
+│ overtime_*   │        ├────────────────────────────┤  │
+│ onboarding   │        │ id  ◄──────────────────────┼──┘
+└──────────────┘        │ name · photo               │  │
+                        │ rut (nullable)             │  │
+┌──────────────┐        │ dni (nullable)             │  │
+│worker_advances│ ──────┤ hourly_rate · start_date   │  │
+│ id            │   FK   │ status · created/updated   │  │
+│ worker_id ────┼───────┘────────────────────────────┘  │
+│ amount · date │                                         │
+│ notes         │ ◄───────────────────────────────────────┘
+└──────────────┘
 ```
 
 ---
@@ -498,17 +441,26 @@ CHECK (status IN ('ACTIVE', 'INACTIVE'))
 | Columna | Tipo | Restricción | Descripción |
 |---|---|---|---|
 | `id` | INTEGER | PK AUTOINCREMENT | — |
-| `worker_id` | INTEGER | FK → workers(id) | Trabajador al que pertenece |
+| `worker_id` | INTEGER | FK → workers(id) ON DELETE RESTRICT | Trabajador al que pertenece |
 | `date` | TEXT | NOT NULL | `YYYY-MM-DD` |
-| `entry_time` | TEXT | NOT NULL | `HH:MM:SS` — hora de entrada |
-| `exit_time` | TEXT | NULL | `HH:MM:SS` — null hasta marcar salida |
-| `break_minutes` | INTEGER | DEFAULT 30 | Minutos de colación descontados |
-| `break_start_time` | TEXT | NULL | `HH:MM:SS` — usado si `manual_break = true` |
+| `entry_time` | TEXT | NOT NULL | `HH:MM` — hora de entrada |
+| `exit_time` | TEXT | NULL | `HH:MM` — null hasta marcar salida |
+| **`*_snap`** | — | NOT NULL | Snapshots congelados al marcar entrada (ver abajo) |
+| `break_minutes` | INTEGER | DEFAULT 0 | Minutos de colación descontados |
 | `worked_minutes` | INTEGER | NULL | Total trabajado (ya descontada colación) |
 | `overtime_minutes` | INTEGER | DEFAULT 0 | Minutos sobre la jornada base |
+| `overtime_payment` | REAL | DEFAULT 0 | Pago de horas extra (con recargo) |
 | `daily_payment` | REAL | NULL | Pago del día en CLP |
 | `delay_minutes` | INTEGER | DEFAULT 0 | 0 si llegó a tiempo |
+| `status` | TEXT | DEFAULT `OPEN` | `OPEN` \| `CLOSED` \| `PENDING` |
 | `created_at` | TEXT | NOT NULL | Timestamp del registro |
+
+**Columnas `*_snap` (integridad histórica):** se copian desde `workers` y
+`app_config` al marcar entrada y **nunca se modifican**. Todos los cálculos de
+salida usan estos valores, no los actuales: `hourly_rate_snap`, `start_hour_snap`,
+`tolerance_mins_snap`, `exit_tolerance_mins_snap`, `overtime_multiplier_snap`,
+`base_daily_hours_snap`, `exit_hour_snap`, `default_break_minutes_snap`,
+`overtime_rate_snap`.
 
 **Restricción:**
 ```sql
@@ -536,14 +488,35 @@ UNIQUE(worker_id, date)  -- Un solo registro por trabajador por día
 |---|---|---|---|
 | `id` | INTEGER | 1 | Siempre 1 — fila única |
 | `start_hour` | TEXT | `09:00` | Hora de inicio de jornada (`HH:MM`) |
-| `tolerance_minutes` | INTEGER | `10` | Minutos de tolerancia para atrasos |
-| `manual_break` | INTEGER | `0` | `0` = descuento automático, `1` = botones de colación |
-| `base_daily_hours` | INTEGER | `8` | Horas de jornada base para cálculo de extras |
+| `exit_hour` | TEXT | `18:00` | Hora oficial de salida (`HH:MM`) |
+| `base_daily_hours` | REAL | `8.5` | Horas de jornada base para cálculo de extras |
+| `default_break_minutes` | INTEGER | `30` | Colación sugerida |
+| `tolerance_minutes` | INTEGER | `5` | Tolerancia de atraso (entrada) |
+| `exit_tolerance_minutes` | INTEGER | `15` | Tolerancia de salida anticipada |
+| `overtime_multiplier` | REAL | `1.5` | Recargo de la hora extra (×) |
+| `overtime_rate` | REAL | `5000` | Tarifa de referencia de hora extra (CLP) |
+| `onboarding_done` | INTEGER | `0` | `0` = primer inicio, `1` = configurado |
 
 **Restricción:**
 ```sql
 CHECK (id = 1)  -- Solo puede existir una fila de configuración
 ```
+
+---
+
+### Tabla `worker_advances`
+
+Adelantos de dinero a trabajadores. Se descuentan del líquido del período en la
+vista de Finanzas (no afectan el `daily_payment` de cada jornada).
+
+| Columna | Tipo | Restricción | Descripción |
+|---|---|---|---|
+| `id` | INTEGER | PK AUTOINCREMENT | — |
+| `worker_id` | INTEGER | FK → workers(id) ON DELETE CASCADE | Trabajador |
+| `amount` | REAL | CHECK > 0 | Monto del adelanto (CLP) |
+| `date` | TEXT | NOT NULL | `YYYY-MM-DD` |
+| `notes` | TEXT | NULL | Detalle del adelanto |
+| `created_at` | TEXT | NOT NULL | Timestamp |
 
 ---
 
@@ -567,12 +540,23 @@ shared/types/
 ### Fórmulas de cálculo
 
 ```
-Minutos trabajados  = (exit_time - entry_time) - break_minutes
-Minutos extra       = MAX(0, worked_minutes - base_daily_hours * 60)
-Minutos normales    = worked_minutes - overtime_minutes
-Pago del día        = (worked_minutes / 60) × hourly_rate
-Atraso (min)        = MAX(0, entry_time - (start_hour + tolerance_minutes))
+Entrada efectiva    = entrada ajustada a start_hour (entrada temprana y dentro de tolerancia)
+Salida efectiva     = salida ajustada a exit_hour si sale dentro de exit_tolerance
+Minutos trabajados  = (salida efectiva - entrada efectiva) - break_minutes
+Minutos extra       = MAX(0, worked_minutes - base_daily_hours_snap × 60)
+Minutos base        = MIN(worked_minutes, base_daily_hours_snap × 60)
+Atraso (min)        = MAX(0, entrada - (start_hour_snap + tolerance_mins_snap))
+
+Pago base       = (minutos base / 60) × hourly_rate_snap
+Pago extra      = (minutos extra / 60) × (hourly_rate_snap × overtime_multiplier_snap)
+Penalización    = (delay_minutes / 60) × hourly_rate_snap
+Pago del día    = MAX(0, pago base + pago extra − penalización)
 ```
+
+> ⚠️ **Nota:** la implementación actual aplica **recargo ×1.5** a la hora extra y
+> **descuenta el atraso del pago**. Esto difiere de los criterios HU-08/HU-10
+> originales (que planteaban hora extra sin recargo y sin descuento automático).
+> El comportamiento vigente es el de las fórmulas de arriba.
 
 ---
 
@@ -596,10 +580,10 @@ El desarrollo está organizado en **4 fases** que priorizan funcionalidad críti
 | F1-07 | ✅ Resumen del día al marcar salida | HU-09 |
 | F1-08 | ✅ Detección automática de atrasos | HU-10 |
 | F1-09 | ✅ Descuento automático de colación (30 min fijos) | HU-06 |
-| F1-10 | Validación de RUT con dígito verificador en el frontend | HU-01 |
-| F1-11 | Admin login / logout con sesión en Pinia + timeout | HU-03 |
-| F1-12 | CRUD completo de trabajadores (vista `Trabajadores.vue`) | HU-01, HU-02 |
-| F1-13 | Configuración de jornada (hora inicio + tolerancia) | HU-10 |
+| F1-10 | ✅ Validación de RUT (formato + dígito verificador, vía Zod) | HU-01 |
+| F1-11 | ✅ Admin login / logout con sesión en Pinia + timeout | HU-03 |
+| F1-12 | ✅ CRUD completo de trabajadores (vista `Trabajadores.vue`) | HU-01, HU-02 |
+| F1-13 | ✅ Configuración de jornada (hora inicio + tolerancia + extras) | HU-10 |
 
 ---
 
@@ -650,12 +634,18 @@ El desarrollo está organizado en **4 fases** que priorizan funcionalidad críti
 ### Estado actual del proyecto
 
 ```
-v0.1 ░░░░░░░░░░░░░░░░░░░░  En progreso
+v0.1 ████████████████████  Completada (base funcional)
 
-✅ Completado   F1-01 → F1-09  (base del proyecto scaffoldeada)
-🔲 Pendiente    F1-10 → F1-13  (vistas del admin y validaciones)
-🔲 Pendiente    Fase 2, 3, 4
+✅ Completado   Fase 1  (F1-01 → F1-13: marcaje, CRUD, login, config, validaciones)
+✅ Completado   Fase 2  (historial, edición de registros, resúmenes por período)
+🟦 En progreso  Fase 3  (Dashboard y Finanzas/adelantos implementados)
+🔲 Pendiente    Exportación a Excel (ExcelJS está en deps; faltan handlers IPC)
+🔲 Pendiente    Fase 4  (icono/instalador, modo kiosk, manual de usuario)
 ```
+
+> Funcionalidades ya presentes más allá del roadmap original: **horas extra con
+> recargo ×1.5**, **penalización por atraso**, **tolerancia de salida**,
+> **adelantos de dinero** y **snapshots históricos** por registro.
 
 ---
 

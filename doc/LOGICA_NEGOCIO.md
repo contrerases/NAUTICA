@@ -1,7 +1,8 @@
 # Náutica Jornada — Lógica de Negocio
 
 > Documento de especificación técnica de las reglas de negocio del sistema.
-> Última actualización: 2026-03-23
+> Sincronizado con la implementación real (repositorios en `src/backend/repositories/`).
+> Última actualización: 2026-06-29
 
 ---
 
@@ -23,25 +24,34 @@
 
 ## Configuración Global
 
-### Valores por defecto
+### Valores por defecto (tabla `app_config`)
 
 ```javascript
 {
-  start_hour: '09:00',          // Hora de inicio de jornada
-  base_daily_hours: 8,          // Jornada base (extras después de esto)
-  tolerance_minutes: 5,         // Tolerancia para atrasos
-  onboarding_done: 0            // Primer inicio
+  start_hour: '09:00',           // Hora de inicio de jornada
+  exit_hour: '18:00',            // Hora oficial de salida
+  base_daily_hours: 8.5,         // Jornada base en horas (extras después de esto)
+  default_break_minutes: 30,     // Colación sugerida
+  tolerance_minutes: 5,          // Tolerancia de atraso (entrada)
+  exit_tolerance_minutes: 15,    // Tolerancia de salida anticipada
+  overtime_multiplier: 1.5,      // Recargo de hora extra (×)
+  overtime_rate: 5000,           // Tarifa de referencia de hora extra (CLP)
+  onboarding_done: 0             // 0 = primer inicio, 1 = configurado
 }
 ```
 
 ### Reglas
 
-- **Hora de entrada:** Siempre a las **09:00**
-- **Tolerancia:** **5 minutos**
+- **Hora de entrada:** por defecto **09:00** (configurable)
+- **Tolerancia de entrada:** **5 minutos**
   - Si marca entrada entre 09:00 y 09:05 → NO es atraso
   - Si marca entrada a las 09:06 o después → SÍ es atraso
-- **Jornada base:** **8 horas**
-  - Todo lo que pase de 8 horas trabajadas = horas extras
+- **Tolerancia de salida:** **15 minutos** antes de `exit_hour`
+  - Si sale entre 17:45 y 18:00 → se le cuenta como si saliera a las 18:00
+- **Jornada base:** **8.5 horas** (510 min)
+  - Todo lo que pase de 8.5 horas trabajadas = horas extras
+- **Entrada temprana:** si marca antes de `start_hour`, el cálculo de horas
+  arranca desde `start_hour` (no se paga el tiempo previo a la jornada).
 
 ---
 
@@ -235,9 +245,15 @@ delay_minutes = MAX(0, entry_time - hora_límite)
 
 ### ¿Se descuenta del pago?
 
-**NO automáticamente.**
+**SÍ.** La implementación actual descuenta los minutos de atraso del pago del día
+(penalización), a tarifa hora normal:
 
-El sistema solo **registra** el atraso. El administrador decide si aplicar descuentos o sanciones.
+```
+penalty_pay = (delay_minutes / 60) * hourly_rate_snap
+```
+
+`delay_minutes` queda registrado siempre en el historial. El monto se resta del
+pago total (`daily_payment`), que nunca baja de 0.
 
 ---
 
@@ -245,42 +261,63 @@ El sistema solo **registra** el atraso. El administrador decide si aplicar descu
 
 ### Definición
 
-**Horas extras = todo lo que pase de 8 horas trabajadas**
+**Horas extras = todo lo que pase de 8.5 horas trabajadas** (`base_daily_hours_snap`).
 
 ### Cálculo
 
 ```
-worked_minutes   = (exit_time - entry_time) - break_minutes
-overtime_minutes = MAX(0, worked_minutes - base_daily_hours_snap * 60)
-normal_minutes   = worked_minutes - overtime_minutes
+worked_minutes   = (exit_time - entry_time_efectiva) - break_minutes
+base_limit       = base_daily_hours_snap * 60            // 510 min por defecto
+overtime_minutes = MAX(0, worked_minutes - base_limit)
+base_minutes     = MIN(worked_minutes, base_limit)
 ```
+
+> `entry_time_efectiva` ajusta la entrada temprana (cuenta desde `start_hour`) y
+> la salida anticipada dentro de la tolerancia (cuenta hasta `exit_hour`).
 
 ### Valor de la hora extra
 
-**Mismo valor que la hora normal** (sin recargo).
+**La hora extra tiene recargo `overtime_multiplier` (1.5 por defecto).**
 
 ```
-pago_total = (worked_minutes / 60) * hourly_rate_snap
+base_payment     = (base_minutes / 60) * hourly_rate_snap
+overtime_payment = (overtime_minutes / 60) * (hourly_rate_snap * overtime_multiplier_snap)
+penalty_pay      = (delay_minutes / 60) * hourly_rate_snap
+daily_payment    = MAX(0, base_payment + overtime_payment - penalty_pay)
 ```
 
-No se calcula por separado horas normales vs extras.
-
-### Ejemplos
+### Ejemplos (hourly_rate = 5000, base 8.5h = 510 min)
 
 **Jornada sin extras:**
-- Trabajado: 8h = 480 min
-- Extras: 0 min
-- Pago: `(480 / 60) * 5000 = $40.000`
+- Trabajado: 8.5h = 510 min · sin atraso
+- Pago: `(510 / 60) * 5000 = $42.500`
 
 **Jornada con extras:**
-- Trabajado: 9h 30min = 570 min
-- Extras: 90 min (1h 30min)
-- Pago: `(570 / 60) * 5000 = $47.500`
+- Trabajado: 9.5h = 570 min · extras: 60 min · sin atraso
+- Base: `(510/60) * 5000 = 42.500`
+- Extra: `(60/60) * (5000 * 1.5) = 7.500`
+- Pago: **$50.000**
+
+**Jornada con atraso:**
+- Trabajado: 510 min · atraso: 20 min
+- Base: `42.500` − Penalización: `(20/60)*5000 ≈ 1.667`
+- Pago: **≈ $40.833**
 
 **Jornada corta:**
-- Trabajado: 6h = 360 min
-- Extras: 0 min
-- Pago: `(360 / 60) * 5000 = $30.000` (pago proporcional)
+- Trabajado: 6h = 360 min · sin extras
+- Pago: `(360 / 60) * 5000 = $30.000` (proporcional)
+
+---
+
+## Adelantos de Dinero
+
+Los trabajadores pueden recibir adelantos, registrados en la tabla `worker_advances`
+(`amount`, `date`, `notes`). No afectan el `daily_payment` de cada jornada: se
+**descuentan del líquido a pagar** al consolidar el período en la vista de Finanzas.
+
+```
+líquido_período = SUM(daily_payment del período) - SUM(adelantos del período)
+```
 
 ---
 
@@ -557,16 +594,19 @@ La auditoría es implícita:
 ## Resumen de Reglas Críticas
 
 1. ✅ **Formato de horas:** HH:MM (sin segundos)
-2. ✅ **Colación:** Se pregunta al cerrar (0 o 30 min)
-3. ✅ **Tolerancia:** 5 minutos desde las 09:00
-4. ✅ **Jornada base:** 8 horas (extras después de eso)
-5. ✅ **Snapshots:** Preservan valores históricos
-6. ✅ **Soft delete:** No borrar físicamente trabajadores
-7. ✅ **Validación de RUT:** Formato + dígito verificador
-8. ✅ **Un registro por día:** UNIQUE (worker_id, date)
-9. ✅ **Jornadas pendientes:** Pasan a PENDING automáticamente
-10. ✅ **Solo admin cierra pendientes:** Ingreso manual de salida
+2. ✅ **Colación:** Se pregunta al cerrar (0 = no tomó, 30 = sí)
+3. ✅ **Tolerancia de entrada:** 5 minutos desde las 09:00
+4. ✅ **Tolerancia de salida:** 15 minutos antes de las 18:00
+5. ✅ **Jornada base:** 8.5 horas (extras después de eso)
+6. ✅ **Hora extra con recargo:** ×1.5 (`overtime_multiplier`)
+7. ✅ **Atraso descuenta pago:** penalización a tarifa normal
+8. ✅ **Adelantos:** se descuentan del líquido del período
+9. ✅ **Snapshots:** Preservan valores históricos por registro
+10. ✅ **Soft delete:** No borrar físicamente trabajadores con historial
+11. ✅ **Validación de RUT:** Formato + dígito verificador (en la app, no en la BD)
+12. ✅ **Un registro por día:** UNIQUE (worker_id, date)
+13. ✅ **Jornadas pendientes:** Pasan a PENDING / cierre manual por admin
 
 ---
 
-*Documento técnico para el equipo de desarrollo — Última revisión: 2026-03-23*
+*Documento técnico para el equipo de desarrollo — Última revisión: 2026-06-29*

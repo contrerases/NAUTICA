@@ -1,20 +1,19 @@
 <template>
   <div class="flex flex-col space-y-6 h-full p-6">
     <!-- Encabezado -->
-    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-      <div>
-        <h2 class="text-3xl font-extrabold text-text-base">Historial de Asistencia</h2>
-        <p class="text-text-muted mt-1">Revisa el registro de marcajes, horas de entrada, salida y tiempo trabajado.</p>
-      </div>
-      <div>
+    <PageHeader
+      title="Historial de Asistencia"
+      subtitle="Revisa el registro de marcajes, horas de entrada, salida y tiempo trabajado."
+    >
+      <template #actions>
         <BaseButton variant="primary" @click="openCreateModal">
           <template #icon-left>
             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
           </template>
           Agregar Registro Manual
         </BaseButton>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <!-- Barra de Filtros Avanzados -->
     <BaseCard padding="base" class="bg-surface-muted border-none w-full">
@@ -49,19 +48,17 @@
           class="w-full sm:w-40 flex-shrink-0"
         />
 
-        <div class="w-full sm:w-auto min-w-[200px] flex-shrink-0 space-y-1">
-          <label class="block text-sm font-semibold text-text-base ml-1">Estado de Turno</label>
-          <select 
-            v-model="filterStatus"
-            class="w-full h-[42px] block border border-surface-border rounded-lg bg-surface text-text-base text-sm shadow-sm transition-all outline-none px-4 focus:border-primary focus:ring-2 focus:ring-primary/20"
-          >
-            <option value="ALL">Todos los Registros</option>
-            <option value="CLOSED">Completados (Cerrados)</option>
-            <option value="OPEN">En Turno (Abiertos)</option>
-            <option value="PENDING">Pendientes (Sin Salida)</option>
-            <option value="ANOMALY">Anomalías (A revisar)</option>
-          </select>
-        </div>
+        <BaseSelect
+          v-model="filterStatus"
+          label="Estado de Turno"
+          class="w-full sm:w-auto min-w-[200px] flex-shrink-0"
+        >
+          <option value="ALL">Todos los Registros</option>
+          <option value="CLOSED">Completados (Cerrados)</option>
+          <option value="OPEN">En Turno (Abiertos)</option>
+          <option value="PENDING">Pendientes (Sin Salida)</option>
+          <option value="ANOMALY">Anomalías (A revisar)</option>
+        </BaseSelect>
       </div>
     </BaseCard>
 
@@ -104,26 +101,25 @@
 
         <!-- Entrada -->
         <template #cell-entry_time="{ row }">
-          <span class="font-mono text-emerald-500 font-bold bg-emerald-500/10 px-2 py-1 rounded-md border border-emerald-500/20">
-            {{ row.entry_time }}
-          </span>
+          <TimeBadge :time="row.entry_time" variant="entry" />
         </template>
 
         <!-- Salida -->
         <template #cell-exit_time="{ row }">
-          <span v-if="row.exit_time" class="font-mono text-amber-500 font-bold bg-amber-500/10 px-2 py-1 rounded-md border border-amber-500/20">
-            {{ row.exit_time }}
-          </span>
-          <span v-else class="text-xs text-text-muted italic flex items-center justify-center gap-1">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            En turno
-          </span>
+          <TimeBadge :time="row.exit_time" variant="exit">
+            <template #empty>
+              <span class="text-xs text-text-muted italic flex items-center justify-center gap-1">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                En turno
+              </span>
+            </template>
+          </TimeBadge>
         </template>
 
         <!-- Horas Trabajadas -->
         <template #cell-worked_hours="{ row }">
           <span v-if="row.worked_minutes !== null && row.worked_minutes !== undefined" class="font-bold text-text-base">
-            {{ (row.worked_minutes / 60).toFixed(2) }} hrs
+            {{ formatDuration(row.worked_minutes) }}
           </span>
           <span v-else class="text-text-muted/50">-</span>
         </template>
@@ -147,14 +143,13 @@
       
         <!-- Acciones -->
         <template #cell-actions="{ row }">
-          <button 
-            v-if="isCurrentMonth(row.date)"
-            @click="openEditModal(row)" 
-            class="p-2 text-text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-colors border-none"
+          <IconButton
+            color="primary"
             title="Editar Tiempos"
+            @click="openEditModal(row)"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-          </button>
+          </IconButton>
         </template>
       </BaseTable>
     </BaseCard>
@@ -207,10 +202,10 @@
 
           <div class="space-y-2">
             <label class="block text-sm font-semibold text-text-base">Trabajador <span class="text-danger">*</span></label>
-            <select v-model="createData.worker_id" required class="w-full h-[42px] block border border-surface-border rounded-lg bg-surface text-text-base text-sm shadow-sm transition-all outline-none px-4 focus:border-primary focus:ring-2 focus:ring-primary/20">
+            <BaseSelect v-model="createData.worker_id" required>
               <option value="" disabled>Seleccione trabajador</option>
               <option v-for="w in workers" :key="w.id" :value="w.id">{{ w.name }} ({{ w.rut || w.dni }})</option>
-            </select>
+            </BaseSelect>
           </div>
 
           <BaseInput v-model="createData.date" type="date" label="Fecha del Turno" required />
@@ -240,23 +235,33 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { AttendanceChannels, WorkerChannels } from '../../../shared/types/ipc';
+import { useRoute } from 'vue-router';
+import type { AttendanceRecord, Worker } from '@shared/types';
+import { formatDuration } from '@shared/utils/time';
+import { today, addDays } from '@shared/utils/date';
+import { api } from '../../api';
+import { useAdminStore } from '../../stores/adminStore';
 
-import BaseCard from '../../components/ui/BaseCard.vue';
-import BaseTable from '../../components/ui/BaseTable.vue';
-import BaseBadge from '../../components/ui/BaseBadge.vue';
-import BaseInput from '../../components/ui/BaseInput.vue';
-import BaseAlert from '../../components/ui/BaseAlert.vue';
-import BaseModal from '../../components/ui/BaseModal.vue';
-import BaseButton from '../../components/ui/BaseButton.vue';
+import {
+  BaseCard,
+  BaseTable,
+  BaseBadge,
+  BaseInput,
+  BaseAlert,
+  BaseModal,
+  BaseButton,
+  BaseSelect,
+  PageHeader,
+  TimeBadge,
+  IconButton,
+} from '../../components/ui';
 
 // Estado de la Vista
-import { useRouter, useRoute } from 'vue-router';
-const router = useRouter();
 const route = useRoute();
+const adminStore = useAdminStore();
 
-const attendances = ref<any[]>([]);
-const workers = ref<any[]>([]);
+const attendances = ref<AttendanceRecord[]>([]);
+const workers = ref<Worker[]>([]);
 const loading = ref(true);
 const errorGlobal = ref('');
 const successGlobal = ref('');
@@ -265,13 +270,9 @@ const successGlobal = ref('');
 const searchQuery = ref('');
 const filterStatus = ref(route.query.filter === 'anomalies' ? 'ANOMALY' : 'ALL');
 
-// Por defecto mostrar el día anterior
-const yesterdayRaw = new Date();
-yesterdayRaw.setDate(yesterdayRaw.getDate() - 1);
-const yesterdayStr = yesterdayRaw.toLocaleDateString('sv-SE', {timeZone: 'America/Santiago'});
-
-const todayRaw = new Date();
-const todayStr = todayRaw.toLocaleDateString('sv-SE', {timeZone: 'America/Santiago'});
+// Por defecto mostrar el día anterior (zona horaria del negocio)
+const todayStr = today();
+const yesterdayStr = addDays(todayStr, -1);
 
 const filterDateFrom = ref(yesterdayStr);
 const filterDateTo = ref(yesterdayStr);
@@ -308,13 +309,11 @@ const filteredAttendances = computed(() => {
     }
   }
 
-  // 3. Filtrar por Nombre/RUT/DNI
+  // 3. Filtrar por Nombre del trabajador
   if (searchQuery.value.trim()) {
     const q = searchQuery.value.toLowerCase().trim();
     result = result.filter(a =>
-      (a.worker_name && a.worker_name.toLowerCase().includes(q)) ||
-      (a.rut && a.rut.toLowerCase().includes(q)) ||
-      (a.dni && a.dni.toLowerCase().includes(q))
+      a.worker_name != null && a.worker_name.toLowerCase().includes(q)
     );
   }
 
@@ -327,12 +326,11 @@ const loadAttendances = async () => {
   loading.value = true;
   errorGlobal.value = '';
   try {
-    const data = await window.electron.invoke(AttendanceChannels.GET_ALL);
-    attendances.value = data || [];
-    
-    // Obtener trabajadores para el modal de agregar manual
-    const wData = await window.electron.invoke(WorkerChannels.GET_ACTIVE);
-    workers.value = wData || [];
+    // Listado completo de registros
+    attendances.value = await api.attendance.getAll();
+
+    // Trabajadores activos para el modal de alta manual
+    workers.value = await api.workers.getActive();
   } catch (err: any) {
     console.error('Error cargando historial de asistencias:', err);
     errorGlobal.value = err.message || 'Error al conectar con la base de datos.';
@@ -364,18 +362,11 @@ const editData = ref({
   tomo_colacion: true
 });
 
-const isCurrentMonth = (dateStr: string) => {
-  if (!dateStr) return false;
-  const current = new Date();
-  const currentMonthStr = current.getFullYear() + '-' + String(current.getMonth() + 1).padStart(2, '0');
-  return dateStr.startsWith(currentMonthStr);
-};
-
-const openEditModal = (row: any) => {
+const openEditModal = (row: AttendanceRecord) => {
   editError.value = '';
   editData.value = {
     id: row.id,
-    worker_name: row.worker_name,
+    worker_name: row.worker_name || '',
     date: row.date,
     entry_time: row.entry_time || '',
     exit_time: row.exit_time || '',
@@ -397,20 +388,23 @@ const submitEdit = async () => {
     editLoading.value = false;
     return;
   }
-  
+
+  // Se permite corregir registros de cualquier mes; el backend guarda la traza
+  // de auditoría (updated_by). Pedimos confirmación explícita antes de guardar.
+  if (!confirm('Vas a corregir un registro de asistencia. El cambio queda registrado con tu usuario. ¿Deseas continuar?')) {
+    editLoading.value = false;
+    return;
+  }
+
   try {
-    const payload = {
+    await api.attendance.updateRecord({
       id: editData.value.id,
       entry_time: editData.value.entry_time,
       exit_time: editData.value.exit_time || null,
-      break_minutes: editData.value.tomo_colacion ? 30 : 0
-    };
-    
-    const result = await window.electron.invoke(AttendanceChannels.UPDATE_RECORD, payload);
-    if (!result.ok) {
-       throw new Error(result.error);
-    }
-    
+      break_minutes: editData.value.tomo_colacion ? 30 : 0,
+      adminId: adminStore.admin?.id ?? undefined,
+    });
+
     successGlobal.value = 'Registro actualizado correctamente';
     setTimeout(() => successGlobal.value = '', 3000);
     closeEditModal();
@@ -465,28 +459,25 @@ const submitCreate = async () => {
     createLoading.value = false;
     return;
   }
-  
+
+  // El alta manual puede ser de cualquier mes/fecha; el backend guarda la traza.
+  // Confirmamos porque es una intervención manual sobre el historial.
+  if (!confirm('Vas a crear un registro de asistencia manualmente. El cambio queda registrado con tu usuario. ¿Deseas continuar?')) {
+    createLoading.value = false;
+    return;
+  }
+
   try {
-    // 1. Crear el registro (OPEN)
-    const entryPayload = {
+    // Alta manual del turno completo en una sola llamada.
+    await api.attendance.createManual({
       worker_id: Number(createData.value.worker_id),
       date: createData.value.date,
-      entry_time: createData.value.entry_time
-    };
-    
-    // Si queremos marcar entrada pasada, tenemos que usar UPDATE o similar despues,
-    // pero MARK_ENTRY soporta enviarle 'date' en la version q vimos:
-    const record = await window.electron.invoke(AttendanceChannels.MARK_ENTRY, entryPayload);
-    
-    // 2. Si tiene salida, marcar la salida para que calcule pagos
-    if (createData.value.exit_time) {
-      await window.electron.invoke(AttendanceChannels.MARK_EXIT, {
-        id: record.id,
-        break_minutes: createData.value.tomo_colacion ? 30 : 0,
-        exit_time: createData.value.exit_time
-      });
-    }
-    
+      entry_time: createData.value.entry_time,
+      exit_time: createData.value.exit_time || null,
+      break_minutes: createData.value.tomo_colacion ? 30 : 0,
+      adminId: adminStore.admin?.id ?? undefined,
+    });
+
     successGlobal.value = 'Registro agregado manualmente';
     setTimeout(() => successGlobal.value = '', 3000);
     closeCreateModal();

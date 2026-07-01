@@ -1,25 +1,19 @@
 <template>
   <router-view />
-  <DatabaseSyncIndicator />
 </template>
 
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import DatabaseSyncIndicator from './components/ui/DatabaseSyncIndicator.vue';
+import { useConfigStore } from './stores/configStore';
 
 /**
- * Componente raíz de la aplicación
- * Carga la configuración al iniciar y renderiza la vista activa del router
+ * Componente raíz. Carga la configuración vigente al iniciar y renderiza el router.
  */
+const configStore = useConfigStore();
 
 onMounted(async () => {
   console.log('[App] Aplicación iniciada')
-
-  // TODO: Cargar configuración inicial
-  // await configStore.loadConfig()
-
-  // TODO: Verificar jornadas pendientes (pasar OPEN → PENDING si cambió el día)
-  // await attendanceService.checkPendingShifts()
+  await configStore.loadConfig()
 })
 </script>
 

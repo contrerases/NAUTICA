@@ -14,9 +14,6 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json",
-    "verify:workday": "esbuild scripts/verify_workday.ts --bundle --platform=node --format=cjs | node -",
-    "verify:integration": "node scripts/run-integration.cjs",
-    "verify": "npm run verify:workday && npm run verify:integration",
     "package": "npm run build && electron-builder --win --config",
     "postinstall": "electron-builder install-app-deps"
   },
@@ -25,7 +22,6 @@
     "better-sqlite3": "12.8.0",
     "date-fns": "^4.1.0",
     "exceljs": "^4.4.0",
-    "sql.js": "^1.10.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -33,7 +29,6 @@
     "@types/bcryptjs": "^2.4.6",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.11.19",
-    "@types/sql.js": "^1.4.9",
     "@vitejs/plugin-vue": "^5.0.4",
     "@vue/tsconfig": "^0.5.1",
     "autoprefixer": "^10.4.17",
@@ -41,9 +36,7 @@
     "electron-builder": "^24.13.3",
     "electron-vite": "^2.0.0",
     "pinia": "^2.1.7",
-    "png-to-ico": "^3.0.1",
     "postcss": "^8.4.35",
-    "sharp": "^0.35.2",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3",
     "vite": "^5.1.3",

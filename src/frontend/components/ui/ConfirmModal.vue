@@ -5,6 +5,7 @@
     :type="s.danger ? 'warning' : 'info'"
     :show-close-button="false"
     max-width="md"
+    elevated
     @close="cancel"
   >
     <p class="text-text-base whitespace-pre-line">{{ s.message }}</p>

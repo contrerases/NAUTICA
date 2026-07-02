@@ -1,12 +1,12 @@
 <template>
-  <div class="min-h-screen bg-body flex flex-col items-center justify-center p-4 sm:p-8 relative overflow-hidden">
-    
+  <div class="h-screen overflow-y-auto bg-body flex flex-col items-center p-4 sm:p-8 relative scrollbar-thin">
+
     <!-- Elementos decorativos (Fondo) -->
-    <div class="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-primary-light/5 rounded-full blur-3xl shadow-2xl pointer-events-none"></div>
-    <div class="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-primary/5 rounded-full blur-3xl shadow-2xl pointer-events-none"></div>
+    <div class="fixed top-[-10%] left-[-10%] w-[500px] h-[500px] bg-primary-light/5 rounded-full blur-3xl shadow-2xl pointer-events-none"></div>
+    <div class="fixed bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-primary/5 rounded-full blur-3xl shadow-2xl pointer-events-none"></div>
 
     <!-- Botón Acceso Administrador (Oculto sutilmente en la esquina) -->
-    <div class="absolute top-6 right-8 z-20">
+    <div class="fixed top-6 right-8 z-20">
       <BaseButton variant="ghost" size="sm" @click="goToAdmin" class="text-text-muted/50 hover:text-primary">
         <template #icon-left>
           <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -18,7 +18,7 @@
       </BaseButton>
     </div>
 
-    <div class="relative z-10 w-full max-w-4xl flex flex-col items-center">
+    <div class="relative z-10 w-full max-w-4xl flex flex-col items-center my-auto py-4">
 
       <!-- Logo -->
       <img :src="logoUrl" alt="Náutica Botes Inflables" class="w-28 h-28 mb-6 object-contain drop-shadow-md select-none" />

@@ -1,11 +1,11 @@
 <template>
-  <div class="min-h-screen bg-body flex flex-col items-center justify-center p-8 relative overflow-hidden">
-    
-    <!-- Elementos decorativos de fondo (ondas/ondas abstractas para "Náutica") -->
-    <div class="absolute top-[-10%] left-[-10%] w-96 h-96 bg-primary-light/10 rounded-full blur-3xl shadow-2xl"></div>
-    <div class="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-primary/10 rounded-full blur-3xl shadow-2xl"></div>
+  <div class="h-screen overflow-y-auto bg-body flex flex-col items-center p-8 relative scrollbar-thin">
 
-    <BaseCard class="max-w-md w-full relative z-10 border-t-4 border-t-primary shadow-lg border-surface-border">
+    <!-- Elementos decorativos de fondo (ondas/ondas abstractas para "Náutica") -->
+    <div class="fixed top-[-10%] left-[-10%] w-96 h-96 bg-primary-light/10 rounded-full blur-3xl shadow-2xl pointer-events-none"></div>
+    <div class="fixed bottom-[-10%] right-[-10%] w-96 h-96 bg-primary/10 rounded-full blur-3xl shadow-2xl pointer-events-none"></div>
+
+    <BaseCard class="max-w-md w-full relative z-10 border-t-4 border-t-primary shadow-lg border-surface-border my-auto">
       
       <!-- Encabezado con Icono -->
       <template #header>

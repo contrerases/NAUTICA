@@ -42,7 +42,9 @@ function createWindow() {
     show: false,
     autoHideMenuBar: true,
     title: 'Náutica Jornada',
-    icon: join(__dirname, '../../resources/icon.ico'),
+    icon: app.isPackaged
+      ? join(process.resourcesPath, 'icon.ico')
+      : join(process.cwd(), 'resources', 'icon.ico'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
       sandbox: false,

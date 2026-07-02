@@ -8,7 +8,7 @@
       leave-from-class="opacity-100"
       leave-to-class="opacity-0"
     >
-      <div v-if="isOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+      <div v-if="isOpen" class="fixed inset-0 flex items-center justify-center p-4 sm:p-6" :class="elevated ? 'z-[100]' : 'z-50'">
         <!-- Backdrop -->
         <div 
           class="absolute inset-0 bg-body/80 backdrop-blur-sm transition-opacity" 
@@ -81,11 +81,14 @@ const props = withDefaults(defineProps<{
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
   showCloseButton?: boolean;
   closeOnBackdrop?: boolean;
+  /** Eleva el z-index para quedar por ENCIMA de otros modales (p. ej. confirmaciones). */
+  elevated?: boolean;
 }>(), {
   type: 'info',
   maxWidth: 'md',
   showCloseButton: true,
-  closeOnBackdrop: false
+  closeOnBackdrop: false,
+  elevated: false
 });
 
 defineEmits(['close']);

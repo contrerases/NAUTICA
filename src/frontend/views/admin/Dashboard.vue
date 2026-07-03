@@ -45,7 +45,7 @@
       </BaseCard>
 
       <!-- Indicador C: Alertas de Faltantes de Salida -->
-      <BaseCard padding="base" class="flex flex-col border-l-4 border-l-danger shadow-danger/10 shadow-lg relative overflow-hidden group hover:border-danger hover:ring-1 hover:ring-danger cursor-pointer transition-all" @click="goToAnomalies">
+      <BaseCard padding="base" class="flex flex-col border-l-4 border-l-danger shadow-danger/10 shadow-lg relative overflow-hidden group hover:border-danger hover:ring-1 hover:ring-danger cursor-pointer transition-all" @click="goToPending">
         <div class="absolute -right-6 -bottom-6 text-danger/5 w-32 h-32 transform group-hover:scale-110 transition-transform">
           <svg fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
         </div>
@@ -135,7 +135,7 @@
               </div>
             </div>
             <div>
-              <button @click="goToAnomalies" class="text-xs font-bold py-1 px-3 rounded-md bg-danger text-white hover:bg-danger/90 transition-all">
+              <button @click="goToPending" class="text-xs font-bold py-1 px-3 rounded-md bg-danger text-white hover:bg-danger/90 transition-all">
                 REVISAR
               </button>
             </div>
@@ -258,8 +258,9 @@ const percentPresent = computed(() => {
   return Math.round((present / total) * 100);
 });
 
-const goToAnomalies = () => {
-  router.push('/admin/historial');
+const goToPending = () => {
+  // Abrir el historial ya filtrado a los pendientes (sin salida), sin acotar por fecha
+  router.push({ path: '/admin/historial', query: { filter: 'pending' } });
 };
 
 const formatDateLocale = (isoStr: string) => {

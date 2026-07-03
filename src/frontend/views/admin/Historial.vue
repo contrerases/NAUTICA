@@ -17,48 +17,77 @@
 
     <!-- Barra de Filtros Avanzados -->
     <BaseCard padding="base" class="bg-surface-muted border-none w-full">
-      <div class="flex flex-row flex-wrap lg:flex-nowrap items-end gap-4 w-full">
-        <BaseInput
-          v-model="searchQuery"
-          id="search-attendance"
-          label="Buscar Trabajador"
-          placeholder="Buscar por nombre o doc..."
-          class="flex-1 min-w-[200px]"
-        >
-          <template #icon>
-            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </template>
-        </BaseInput>
+      <div class="flex flex-col gap-4 w-full">
+        <!-- Fila 1: búsqueda + estado -->
+        <div class="flex flex-row flex-wrap lg:flex-nowrap items-end gap-4 w-full">
+          <BaseInput
+            v-model="searchQuery"
+            id="search-attendance"
+            label="Buscar Trabajador"
+            placeholder="Buscar por nombre o doc..."
+            class="flex-1 min-w-[200px]"
+          >
+            <template #icon>
+              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </template>
+          </BaseInput>
 
-        <BaseInput
-          v-model="filterDateFrom"
-          id="filter-date-from"
-          type="date"
-          label="Desde"
-          class="w-full sm:w-40 flex-shrink-0"
-        />
+          <BaseSelect
+            v-model="filterStatus"
+            label="Estado de Turno"
+            class="w-full sm:w-auto min-w-[220px] flex-shrink-0"
+          >
+            <option value="ALL">Todos los Registros</option>
+            <option value="CLOSED">Completados (Cerrados)</option>
+            <option value="OPEN">En Turno (Abiertos)</option>
+            <option value="PENDING">Pendientes (Sin Salida)</option>
+            <option value="ANOMALY">Anomalías (A revisar)</option>
+          </BaseSelect>
+        </div>
 
-        <BaseInput
-          v-model="filterDateTo"
-          id="filter-date-to"
-          type="date"
-          label="Hasta"
-          class="w-full sm:w-40 flex-shrink-0"
-        />
+        <!-- Fila 2: periodo (presets rápidos) + rango personalizado -->
+        <div class="flex flex-col md:flex-row md:items-end gap-4 w-full">
+          <div class="flex-1 min-w-0">
+            <label class="block text-xs font-semibold text-text-muted mb-1.5">Periodo</label>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="p in datePresets"
+                :key="p.key"
+                type="button"
+                @click="setDateRange(p.key)"
+                :class="[
+                  'px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors',
+                  selectedPreset === p.key
+                    ? 'bg-primary text-white border-primary shadow-sm'
+                    : 'bg-surface text-text-muted border-surface-border hover:text-text-base hover:border-primary/40'
+                ]"
+              >
+                {{ p.label }}
+              </button>
+            </div>
+          </div>
 
-        <BaseSelect
-          v-model="filterStatus"
-          label="Estado de Turno"
-          class="w-full sm:w-auto min-w-[200px] flex-shrink-0"
-        >
-          <option value="ALL">Todos los Registros</option>
-          <option value="CLOSED">Completados (Cerrados)</option>
-          <option value="OPEN">En Turno (Abiertos)</option>
-          <option value="PENDING">Pendientes (Sin Salida)</option>
-          <option value="ANOMALY">Anomalías (A revisar)</option>
-        </BaseSelect>
+          <div class="flex items-end gap-3 flex-shrink-0">
+            <BaseInput
+              v-model="filterDateFrom"
+              @update:modelValue="markCustomRange"
+              id="filter-date-from"
+              type="date"
+              label="Desde"
+              class="w-full sm:w-40"
+            />
+            <BaseInput
+              v-model="filterDateTo"
+              @update:modelValue="markCustomRange"
+              id="filter-date-to"
+              type="date"
+              label="Hasta"
+              class="w-full sm:w-40"
+            />
+          </div>
+        </div>
       </div>
     </BaseCard>
 
@@ -269,14 +298,62 @@ const successGlobal = ref('');
 
 // Filtros
 const searchQuery = ref('');
-const filterStatus = ref(route.query.filter === 'anomalies' ? 'ANOMALY' : 'ALL');
+const filterStatus = ref(
+  route.query.filter === 'anomalies' ? 'ANOMALY'
+  : route.query.filter === 'pending' ? 'PENDING'
+  : 'ALL'
+);
 
-// Por defecto mostrar el día anterior (zona horaria del negocio)
 const todayStr = today();
-const yesterdayStr = addDays(todayStr, -1);
+const monthStartStr = todayStr.slice(0, 7) + '-01';
 
-const filterDateFrom = ref(yesterdayStr);
-const filterDateTo = ref(yesterdayStr);
+// Si llegamos desde el Dashboard con un filtro de estado (pendientes/anomalías),
+// no acotamos por fecha para no ocultar registros de días anteriores.
+// En uso normal, por defecto mostramos el mes en curso.
+const cameWithFilter = !!route.query.filter;
+const filterDateFrom = ref(cameWithFilter ? '' : monthStartStr);
+const filterDateTo = ref(cameWithFilter ? '' : todayStr);
+
+// Presets de rango de fecha (para no tener que llenar Desde/Hasta a mano)
+const datePresets = [
+  { key: 'today', label: 'Hoy' },
+  { key: 'yesterday', label: 'Ayer' },
+  { key: 'week', label: 'Últimos 7 días' },
+  { key: 'month', label: 'Este mes' },
+  { key: 'all', label: 'Todo' }
+];
+
+// Recordamos el preset elegido explícitamente (no lo derivamos del rango: dos
+// presets pueden producir el MISMO rango — p.ej. el día 1 del mes "Hoy" y
+// "Este mes" coinciden — y ahí el resaltado se confundía).
+const selectedPreset = ref(cameWithFilter ? 'all' : 'month');
+
+const setDateRange = (preset: string) => {
+  const t = today();
+  if (preset === 'today') {
+    filterDateFrom.value = t;
+    filterDateTo.value = t;
+  } else if (preset === 'yesterday') {
+    const y = addDays(t, -1);
+    filterDateFrom.value = y;
+    filterDateTo.value = y;
+  } else if (preset === 'week') {
+    filterDateFrom.value = addDays(t, -6);
+    filterDateTo.value = t;
+  } else if (preset === 'month') {
+    filterDateFrom.value = t.slice(0, 7) + '-01';
+    filterDateTo.value = t;
+  } else if (preset === 'all') {
+    filterDateFrom.value = '';
+    filterDateTo.value = '';
+  }
+  selectedPreset.value = preset;
+};
+
+// Cuando el usuario edita Desde/Hasta a mano, dejamos de resaltar cualquier preset
+const markCustomRange = () => {
+  selectedPreset.value = 'custom';
+};
 
 // Columnas de la tabla
 const tableColumns = [

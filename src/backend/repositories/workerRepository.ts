@@ -1,5 +1,6 @@
 import { getDatabase } from '../database/connection';
 import type { Worker, WorkerStatus, PayModel } from '../../shared/types/worker';
+import { addDays } from '../../shared/utils/date';
 
 /** Acceso a datos de trabajadores y su historial de tarifa. Solo SQL. */
 export const workerRepository = {
@@ -74,14 +75,20 @@ export const workerRepository = {
     getDatabase().prepare('DELETE FROM workers WHERE id = ?').run(id);
   },
 
-  // ── Historial de tarifa ─────────────────────────────────
-  insertRate(workerId: number, hourlyRate: number, effectiveFrom: string): void {
+  // ── Historial de tarifa (valor hora por fecha, con tramos) ──────
+  insertRate(
+    workerId: number,
+    hourlyRate: number,
+    effectiveFrom: string,
+    adminId: number | null = null,
+    note: string | null = null,
+  ): void {
     getDatabase()
       .prepare(
-        `INSERT INTO worker_rate_history (worker_id, hourly_rate, effective_from)
-         VALUES (?, ?, ?)`,
+        `INSERT INTO worker_rate_history (worker_id, hourly_rate, effective_from, note, created_by)
+         VALUES (?, ?, ?, ?, ?)`,
       )
-      .run(workerId, hourlyRate, effectiveFrom);
+      .run(workerId, hourlyRate, effectiveFrom, note, adminId);
   },
 
   /** Tarifa vigente en una fecha: la de mayor effective_from <= date. */
@@ -94,6 +101,38 @@ export const workerRepository = {
       )
       .get(workerId, date) as { hourly_rate: number } | undefined;
     return row?.hourly_rate;
+  },
+
+  /**
+   * Fija el valor hora para un rango de fechas.
+   *  - Sin `to`: cambio ABIERTO desde `from` (aumento o corrección hacia adelante).
+   *  - Con `to`: corrige SOLO el tramo [from, to] al valor dado y restaura, desde
+   *    to+1, el valor que venía después (así el resto del historial no cambia).
+   */
+  setRateRange(
+    workerId: number,
+    value: number,
+    from: string,
+    to: string | null,
+    adminId: number | null,
+    note: string | null,
+  ): void {
+    if (!to) {
+      this.insertRate(workerId, value, from, adminId, note);
+      return;
+    }
+    const after = this.getRateForDate(workerId, addDays(to, 1)); // valor tras el tramo (pre-op)
+    // Quita versiones dentro de (from, to] para que el valor sea uniforme en el tramo.
+    getDatabase()
+      .prepare(
+        `DELETE FROM worker_rate_history
+         WHERE worker_id = ? AND effective_from > ? AND effective_from <= ?`,
+      )
+      .run(workerId, from, to);
+    this.insertRate(workerId, value, from, adminId, note);
+    if (after != null) {
+      this.insertRate(workerId, after, addDays(to, 1), adminId, 'restaurar tras corrección');
+    }
   },
 
   // ── Historial de modelo de pago + sueldo ────────────────

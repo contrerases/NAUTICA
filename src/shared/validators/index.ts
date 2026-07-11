@@ -63,6 +63,11 @@ export const updateWorkerSchema = z
     dni: z.string().trim().min(1).nullish(),
     photo: z.string().nullish(),
     hourly_rate: z.number().int().positive().optional(),
+    // Vigencia del valor hora: sin "to" = cambio abierto desde "from" (o hoy);
+    // con "to" = corrige SOLO el tramo [from, to].
+    rate_effective_from: ISO_DATE.optional(),
+    rate_effective_to: ISO_DATE.nullish(),
+    rate_note: z.string().nullish(),
     pay_model: payModelField.optional(),
     monthly_salary: z.number().int().nonnegative().optional(),
     start_date: ISO_DATE.optional(),
@@ -71,6 +76,10 @@ export const updateWorkerSchema = z
   .refine((w) => w.pay_model !== 'FIXED_SALARY' || (w.monthly_salary !== undefined && w.monthly_salary > 0), {
     message: 'Indica el sueldo mensual (mayor a cero) para el modelo de sueldo fijo.',
     path: ['monthly_salary'],
+  })
+  .refine((w) => w.rate_effective_to == null || w.rate_effective_from == null || w.rate_effective_to >= w.rate_effective_from, {
+    message: 'El "hasta" del tramo debe ser posterior o igual al "desde".',
+    path: ['rate_effective_to'],
   });
 
 export const workerIdentitySchema = z.object({

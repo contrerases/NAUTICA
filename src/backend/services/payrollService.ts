@@ -28,6 +28,11 @@ export const payrollService = {
     const records = attendanceRepository.getByMonthWithNames(period);
     const advances = advanceRepository.getByMonthWithNames(period);
 
+    // Padrón para resolver nombre/estado y valor hora de respaldo.
+    const wmap = new Map(workerRepository.getAll().map((w) => [w.id, w]));
+    const rateAt = (workerId: number, date: string): number =>
+      workerRepository.getRateForDate(workerId, date) ?? wmap.get(workerId)?.hourly_rate ?? 0;
+
     const map = new Map<number, WorkerLiquidation>();
     const ensure = (id: number, name: string, status: string): WorkerLiquidation => {
       let row = map.get(id);
@@ -56,15 +61,20 @@ export const payrollService = {
     };
 
     for (const r of records) {
-      const row = ensure(r.worker_id, r.worker_name ?? '—', 'ACTIVE');
-      // El atraso se conoce desde la entrada (incluye turnos aún abiertos).
+      const row = ensure(r.worker_id, r.worker_name ?? '—', wmap.get(r.worker_id)?.status ?? 'ACTIVE');
+      const rate = rateAt(r.worker_id, r.date);
+      // El atraso se conoce desde la entrada (incluye turnos aún abiertos); se valoriza
+      // con el valor hora vigente ESA fecha (respeta tramos/correcciones).
       row.delay_minutes += r.delay_minutes ?? 0;
+      row.delay_deduction += roundCLP(((r.delay_minutes ?? 0) / 60) * rate);
       if (r.status !== 'CLOSED') continue;
       row.days_worked += 1;
       row.total_minutes += r.worked_minutes ?? 0;
       row.overtime_minutes += r.overtime_minutes;
-      row.base_payment += r.base_payment;
-      row.overtime_payment += r.overtime_payment;
+      // Valor por hora de la base y de la extra, resuelto por fecha. El modelo (si la
+      // base se paga o va en el sueldo) se decide al combinar, a nivel del período.
+      row.base_payment += roundCLP(((r.base_minutes ?? 0) / 60) * rate);
+      row.overtime_payment += roundCLP((r.overtime_minutes / 60) * rate * r.overtime_multiplier_snap);
     }
 
     for (const a of advances) {
@@ -93,17 +103,14 @@ export const payrollService = {
 
     const workers = [...map.values()].map((w) => {
       if (w.pay_model === 'FIXED_SALARY') {
-        // La jornada base va en el sueldo (no se paga por hora); el atraso del mes se
-        // descuenta (min→hora × valor hora del trabajador) con tope en 0.
-        const rate =
-          workerRepository.getRateForDate(w.worker_id, periodRef) ??
-          workerRepository.findById(w.worker_id)?.hourly_rate ??
-          0;
-        w.delay_deduction = roundCLP((w.delay_minutes / 60) * rate);
+        // La jornada base va en el sueldo (no se paga por hora); el atraso del mes ya
+        // viene acumulado y valorizado por fecha, y se descuenta con tope en 0.
         w.base_payment = 0;
         const salaryAfterDelay = Math.max(0, w.fixed_salary - w.delay_deduction);
         w.gross_payment = salaryAfterDelay + w.overtime_payment;
       } else {
+        // Por hora: se paga base + extra; el atraso no descuenta (ya trabajó menos).
+        w.delay_deduction = 0;
         w.gross_payment = w.base_payment + w.overtime_payment;
       }
       w.net_payment = w.gross_payment - w.advances_amount;

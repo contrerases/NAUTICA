@@ -495,7 +495,7 @@ const showSuccessFeedback = (msg: string, record?: AttendanceRecord) => {
           payment: formatCLP(record.daily_payment ?? 0),
           overtimeMinutes: record.overtime_minutes,
           delayMinutes: record.delay_minutes,
-          salaried: record.pay_model_snap === 'FIXED_SALARY',
+          salaried: record.pay_model === 'FIXED_SALARY',
         }
       : null;
   isSuccessModalOpen.value = true;

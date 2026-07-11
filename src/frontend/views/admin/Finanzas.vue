@@ -191,7 +191,7 @@
               <td class="px-4 py-2 text-center text-amber-500">{{ rec.overtime_minutes > 0 ? formatDuration(rec.overtime_minutes) : '-' }}</td>
               <td class="px-4 py-2 text-right font-bold text-primary">
                 {{ formatCLP(rec.daily_payment || 0) }}
-                <span v-if="rec.pay_model_snap === 'FIXED_SALARY'" class="block text-[10px] font-normal text-text-muted">solo extras (base en sueldo)</span>
+                <span v-if="rec.pay_model === 'FIXED_SALARY'" class="block text-[10px] font-normal text-text-muted">solo extras (base en sueldo)</span>
               </td>
             </tr>
           </tbody>

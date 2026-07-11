@@ -9,6 +9,7 @@ import { configService } from './configService';
 import {
   computeWorkday,
   computeDelayFromTime,
+  priceDay,
   type WorkdaySnapshot,
 } from '../../shared/domain/workday';
 import type {
@@ -21,37 +22,37 @@ import type {
 } from '../../shared/types/attendance';
 import { today, nowTime } from '../../shared/utils/date';
 
-/** Construye el snapshot congelado a partir de la config y la tarifa vigentes en la fecha. */
-function buildSnapshot(workerId: number, date: string): AttendanceSnapshot {
+/** Snapshot del HORARIO vigente en la fecha (sin precio ni modelo). */
+function buildSnapshot(date: string): AttendanceSnapshot {
   const cfg = configService.getConfigForDate(date);
-  const worker = workerRepository.findById(workerId);
-  if (!worker) throw new Error('Trabajador no encontrado.');
-  const rate = workerRepository.getRateForDate(workerId, date) ?? worker.hourly_rate;
-  const sal = workerRepository.getSalaryForDate(workerId, date);
-  const payModel = sal?.pay_model ?? worker.pay_model ?? 'HOURLY';
   return {
-    hourly_rate_snap: rate,
     start_hour_snap: cfg.startHour,
     exit_hour_snap: cfg.exitHour,
     tolerance_snap: cfg.toleranceMinutes,
     exit_tolerance_snap: cfg.exitToleranceMinutes,
     base_daily_minutes_snap: cfg.baseDailyMinutes,
     overtime_multiplier_snap: cfg.overtimeMultiplier,
-    pay_model_snap: payModel,
   };
 }
 
-/** WorkdaySnapshot (para el motor) desde el snapshot congelado del registro. */
+/** WorkdaySnapshot (para el motor) desde el snapshot de horario del registro. */
 function snapOf(r: AttendanceRecord): WorkdaySnapshot {
   return {
-    hourlyRate: r.hourly_rate_snap,
-    payModel: r.pay_model_snap,
     startHour: r.start_hour_snap,
     exitHour: r.exit_hour_snap,
     toleranceMinutes: r.tolerance_snap,
     exitToleranceMinutes: r.exit_tolerance_snap,
     baseDailyMinutes: r.base_daily_minutes_snap,
-    overtimeMultiplier: r.overtime_multiplier_snap,
+  };
+}
+
+function wsnapOf(snap: AttendanceSnapshot): WorkdaySnapshot {
+  return {
+    startHour: snap.start_hour_snap,
+    exitHour: snap.exit_hour_snap,
+    toleranceMinutes: snap.tolerance_snap,
+    exitToleranceMinutes: snap.exit_tolerance_snap,
+    baseDailyMinutes: snap.base_daily_minutes_snap,
   };
 }
 
@@ -68,33 +69,59 @@ function closeFieldsFrom(record: AttendanceRecord, exitTime: string, breakMinute
     worked_minutes: res.workedMinutes,
     base_minutes: res.baseMinutes,
     overtime_minutes: res.overtimeMinutes,
-    base_payment: res.basePayment,
-    overtime_payment: res.overtimePayment,
-    daily_payment: res.dailyPayment,
   };
 }
+
+/**
+ * Rellena los campos CALCULADOS del registro (dinero + modelo), resolviendo el
+ * valor hora vigente por fecha y el modelo del turno. No persiste nada: es solo
+ * para mostrar. La liquidación mensual usa el mismo criterio de forma agregada.
+ */
+function decorate(r: AttendanceRecord): AttendanceRecord {
+  const rate =
+    workerRepository.getRateForDate(r.worker_id, r.date) ??
+    workerRepository.findById(r.worker_id)?.hourly_rate ??
+    0;
+  const sal = workerRepository.getSalaryForDate(r.worker_id, r.date);
+  const model = sal?.pay_model ?? 'HOURLY';
+  r.hourly_rate = rate;
+  r.pay_model = model;
+  if (r.status === 'CLOSED' && r.base_minutes != null) {
+    const p = priceDay(r.base_minutes, r.overtime_minutes, rate, r.overtime_multiplier_snap, model);
+    r.base_payment = p.basePayment;
+    r.overtime_payment = p.overtimePayment;
+    r.daily_payment = p.dailyPayment;
+  } else {
+    r.base_payment = 0;
+    r.overtime_payment = 0;
+    r.daily_payment = null;
+  }
+  return r;
+}
+
+const decorateAll = (rows: AttendanceRecord[]): AttendanceRecord[] => rows.map(decorate);
 
 export const workdayService = {
   checkToday(workerId: number): CheckAttendanceResult {
     const record = attendanceRepository.findByWorkerAndDate(workerId, today());
     return {
       hasRecord: !!record,
-      record,
+      record: record ? decorate(record) : undefined,
       canMarkEntry: !record,
       canMarkExit: !!record && record.status === 'OPEN',
     };
   },
 
   getAll(): AttendanceRecord[] {
-    return attendanceRepository.getAllWithNames();
+    return decorateAll(attendanceRepository.getAllWithNames());
   },
 
   getByWorker(workerId: number): AttendanceRecord[] {
-    return attendanceRepository.getByWorkerWithNames(workerId);
+    return decorateAll(attendanceRepository.getByWorkerWithNames(workerId));
   },
 
   getMissingExits(): AttendanceRecord[] {
-    return attendanceRepository.getMissingExits(today());
+    return decorateAll(attendanceRepository.getMissingExits(today()));
   },
 
   /** Marcaje de entrada (kiosco). Rechaza trabajadores inactivos. */
@@ -110,17 +137,8 @@ export const workdayService = {
       throw new Error('Ya existe un registro para ese día.');
     }
 
-    const snap = buildSnapshot(dto.worker_id, date);
-    const delay = computeDelayFromTime(entry, {
-      hourlyRate: snap.hourly_rate_snap,
-      payModel: snap.pay_model_snap,
-      startHour: snap.start_hour_snap,
-      exitHour: snap.exit_hour_snap,
-      toleranceMinutes: snap.tolerance_snap,
-      exitToleranceMinutes: snap.exit_tolerance_snap,
-      baseDailyMinutes: snap.base_daily_minutes_snap,
-      overtimeMultiplier: snap.overtime_multiplier_snap,
-    });
+    const snap = buildSnapshot(date);
+    const delay = computeDelayFromTime(entry, wsnapOf(snap));
 
     const id = attendanceRepository.insertOpen({
       worker_id: dto.worker_id,
@@ -129,10 +147,10 @@ export const workdayService = {
       delay_minutes: delay,
       snap,
     });
-    return attendanceRepository.findById(id)!;
+    return decorate(attendanceRepository.findById(id)!);
   },
 
-  /** Marcaje de salida (kiosco). Calcula con el motor único. */
+  /** Marcaje de salida (kiosco). Calcula los minutos con el motor único. */
   markExit(dto: MarkExitDto): AttendanceRecord {
     const record = attendanceRepository.findById(dto.id);
     if (!record) throw new Error('Registro no encontrado.');
@@ -142,10 +160,10 @@ export const workdayService = {
     const breakMinutes = dto.break_minutes ?? 0;
     const fields = closeFieldsFrom(record, exit, breakMinutes);
     attendanceRepository.applyClose(record.id, fields, null);
-    return attendanceRepository.findById(record.id)!;
+    return decorate(attendanceRepository.findById(record.id)!);
   },
 
-  /** Corrección de un registro por el admin (con traza). Recalcula con el motor único. */
+  /** Corrección de un registro por el admin (con traza). Recalcula minutos. */
   updateRecord(dto: UpdateRecordDto, adminId: number | null): AttendanceRecord {
     const record = attendanceRepository.findById(dto.id);
     if (!record) throw new Error('Registro no encontrado.');
@@ -157,7 +175,6 @@ export const workdayService = {
       const withEntry = { ...record, entry_time: dto.entry_time };
       const breakMinutes = dto.break_minutes ?? record.break_minutes ?? 0;
       const fields = closeFieldsFrom(withEntry, dto.exit_time, breakMinutes);
-      // el delay se recalcula desde la nueva entrada y se persiste vía applyClose + un update de delay
       const tx = getDatabase().transaction(() => {
         attendanceRepository.applyClose(record.id, { ...fields, exit_time: dto.exit_time! }, adminId);
         getDatabase()
@@ -169,7 +186,7 @@ export const workdayService = {
       // Sin salida → queda OPEN limpio (igual que un registro recién marcado).
       attendanceRepository.applyReopen(record.id, dto.entry_time, delay, adminId);
     }
-    return attendanceRepository.findById(record.id)!;
+    return decorate(attendanceRepository.findById(record.id)!);
   },
 
   /** Alta manual de un turno (puede ser una fecha pasada). Con traza de auditoría. */
@@ -180,18 +197,8 @@ export const workdayService = {
       throw new Error('Ya existe un registro para ese trabajador en esa fecha.');
     }
 
-    const snap = buildSnapshot(dto.worker_id, dto.date);
-    const wsnap: WorkdaySnapshot = {
-      hourlyRate: snap.hourly_rate_snap,
-      payModel: snap.pay_model_snap,
-      startHour: snap.start_hour_snap,
-      exitHour: snap.exit_hour_snap,
-      toleranceMinutes: snap.tolerance_snap,
-      exitToleranceMinutes: snap.exit_tolerance_snap,
-      baseDailyMinutes: snap.base_daily_minutes_snap,
-      overtimeMultiplier: snap.overtime_multiplier_snap,
-    };
-    const delay = computeDelayFromTime(dto.entry_time, wsnap);
+    const snap = buildSnapshot(dto.date);
+    const delay = computeDelayFromTime(dto.entry_time, wsnapOf(snap));
 
     let id = 0;
     const tx = getDatabase().transaction(() => {
@@ -209,6 +216,6 @@ export const workdayService = {
       }
     });
     tx();
-    return attendanceRepository.findById(id)!;
+    return decorate(attendanceRepository.findById(id)!);
   },
 };

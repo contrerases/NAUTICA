@@ -54,6 +54,8 @@ CREATE TABLE IF NOT EXISTS worker_rate_history (
   worker_id      INTEGER NOT NULL REFERENCES workers(id) ON DELETE CASCADE,
   hourly_rate    INTEGER NOT NULL CHECK (hourly_rate > 0),
   effective_from TEXT NOT NULL,   -- "YYYY-MM-DD"
+  note           TEXT DEFAULT NULL,                 -- motivo (p. ej. "corrección")
+  created_by     INTEGER DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,  -- traza del admin
   created_at     TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 CREATE INDEX IF NOT EXISTS idx_rate_worker_date ON worker_rate_history (worker_id, effective_from);
@@ -106,27 +108,25 @@ CREATE TABLE IF NOT EXISTS attendance_records (
 
   break_minutes INTEGER NOT NULL DEFAULT 0 CHECK (break_minutes >= 0),
 
-  -- Calculados al cerrar (NULL/0 mientras está OPEN). Dinero entero.
+  -- HECHOS del turno (minutos). El DINERO NO se guarda: se calcula al liquidar,
+  -- resolviendo el valor hora vigente por fecha (con tramos) y el modelo del
+  -- período. Así, corregir el valor hora o cambiar el modelo se refleja solo.
   worked_minutes   INTEGER DEFAULT NULL CHECK (worked_minutes IS NULL OR worked_minutes >= 0),
   base_minutes     INTEGER DEFAULT NULL CHECK (base_minutes IS NULL OR base_minutes >= 0),
   overtime_minutes INTEGER NOT NULL DEFAULT 0 CHECK (overtime_minutes >= 0),
-  base_payment     INTEGER NOT NULL DEFAULT 0 CHECK (base_payment >= 0),
-  overtime_payment INTEGER NOT NULL DEFAULT 0 CHECK (overtime_payment >= 0),
-  daily_payment    INTEGER DEFAULT NULL CHECK (daily_payment IS NULL OR daily_payment >= 0),
-  delay_minutes    INTEGER NOT NULL DEFAULT 0 CHECK (delay_minutes >= 0),  -- informativo
+  delay_minutes    INTEGER NOT NULL DEFAULT 0 CHECK (delay_minutes >= 0),
 
   status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'CLOSED')),
 
-  -- Snapshots congelados al marcar entrada, según la fecha del turno
-  hourly_rate_snap         INTEGER NOT NULL CHECK (hourly_rate_snap > 0),
+  -- Snapshot del HORARIO vigente al marcar (para recomputar los minutos si se
+  -- edita la entrada/salida). NO incluye precio: el valor hora y el modelo se
+  -- resuelven al liquidar, no se congelan aquí.
   start_hour_snap          TEXT NOT NULL,
   exit_hour_snap           TEXT NOT NULL,
   tolerance_snap           INTEGER NOT NULL CHECK (tolerance_snap >= 0),
   exit_tolerance_snap      INTEGER NOT NULL CHECK (exit_tolerance_snap >= 0),
   base_daily_minutes_snap  INTEGER NOT NULL CHECK (base_daily_minutes_snap > 0),
   overtime_multiplier_snap REAL NOT NULL CHECK (overtime_multiplier_snap > 0),
-  -- Modelo de pago congelado del turno (define si la jornada base se paga por hora)
-  pay_model_snap           TEXT NOT NULL DEFAULT 'HOURLY' CHECK (pay_model_snap IN ('HOURLY', 'FIXED_SALARY')),
 
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   updated_at TEXT DEFAULT NULL,

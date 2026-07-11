@@ -1,34 +1,31 @@
 /**
  * MOTOR DE CÁLCULO DE JORNADA — lógica pura, sin base de datos ni Electron.
  *
- * Es la ÚNICA fuente de verdad del cálculo. La usan tanto el marcaje de salida
- * como la edición de un registro, de modo que "crear" y "editar" siempre dan
- * exactamente el mismo resultado.
+ * Separación clave:
+ *  - computeWorkday: calcula los HECHOS del turno (minutos trabajados, base,
+ *    extra y atraso). NO conoce el valor hora ni el modelo de pago.
+ *  - priceDay / priceDelay: convierten esos minutos en DINERO, aplicando el
+ *    valor hora y el modelo. Esto se hace al LIQUIDAR, resolviendo el valor hora
+ *    vigente por fecha. Así, corregir el valor hora o cambiar el modelo se
+ *    refleja sin tener que tocar los turnos (nada de dinero queda congelado).
  *
- * Reglas (decididas con el negocio):
+ * Reglas de negocio:
  *  - No hay turnos que crucen medianoche: se rechaza salida <= entrada.
  *  - Entrada temprana o dentro de la tolerancia cuenta como la hora de inicio.
  *  - Salida dentro de la tolerancia de salida cuenta como la hora oficial.
- *  - Atraso (modelo HOURLY) = UNA sola sanción: el atrasado trabaja (y cobra)
- *    menos. NO se aplica descuento adicional a nivel de día. delay_minutes es
- *    informativo aquí; en el modelo FIXED_SALARY el atraso se descuenta a fin de
- *    mes en la nómina (no en este motor).
- *  - Modelo FIXED_SALARY: la jornada base NO se paga por hora (va en el sueldo);
- *    a nivel de día solo se paga la hora extra. El sueldo fijo se inyecta una vez
- *    por mes en la nómina, no aquí.
- *  - Hora extra = lo que excede la jornada base, pagada a tarifa × multiplicador
- *    (en AMBOS modelos).
+ *  - Atraso: en modelo por hora es informativo (el atrasado trabaja/cobra menos);
+ *    en modelo sueldo fijo se descuenta a fin de mes en la nómina.
+ *  - Hora extra = lo que excede la jornada base, a valor hora × multiplicador.
  *  - Todo el dinero es entero CLP (se redondea en un único punto).
  */
 
 import { parseTime } from '../utils/time';
 import { roundCLP } from '../utils/money';
 
+export type PayModel = 'HOURLY' | 'FIXED_SALARY';
+
+/** Horario vigente del turno (para calcular los minutos). Sin precio ni modelo. */
 export interface WorkdaySnapshot {
-  /** Valor hora en CLP (entero) vigente para la fecha del turno. */
-  hourlyRate: number;
-  /** Modelo de pago congelado del turno. En FIXED_SALARY la jornada base no se paga por hora. */
-  payModel: 'HOURLY' | 'FIXED_SALARY';
   /** Hora oficial de inicio "HH:MM". */
   startHour: string;
   /** Hora oficial de salida "HH:MM". */
@@ -37,10 +34,8 @@ export interface WorkdaySnapshot {
   toleranceMinutes: number;
   /** Tolerancia de salida anticipada (minutos). */
   exitToleranceMinutes: number;
-  /** Jornada base en minutos (p. ej. 510 = 8.5 h). Entero para evitar fracciones. */
+  /** Jornada base en minutos (p. ej. 510 = 8.5 h). */
   baseDailyMinutes: number;
-  /** Recargo de la hora extra (p. ej. 1.5). */
-  overtimeMultiplier: number;
 }
 
 export interface WorkdayInput {
@@ -50,16 +45,21 @@ export interface WorkdayInput {
   snapshot: WorkdaySnapshot;
 }
 
+/** Resultado del motor: solo HECHOS (minutos). El dinero se calcula aparte. */
 export interface WorkdayResult {
   workedMinutes: number;
   baseMinutes: number;
   overtimeMinutes: number;
-  delayMinutes: number; // informativo, no afecta el pago
+  delayMinutes: number; // informativo aquí
   effectiveEntryMinutes: number;
   effectiveExitMinutes: number;
-  basePayment: number;
+}
+
+/** Dinero de un día, ya aplicado el valor hora y el modelo. */
+export interface DayPrice {
+  basePayment: number; // 0 en sueldo fijo (la jornada base va en el sueldo)
   overtimePayment: number;
-  dailyPayment: number;
+  dailyPayment: number; // base + extra
 }
 
 /** Error de negocio del cálculo (input incoherente). Mensaje apto para el usuario. */
@@ -87,7 +87,7 @@ export function computeDelayFromTime(entryTime: string, snap: WorkdaySnapshot): 
   return computeDelayMinutes(parseTime(entryTime), snap);
 }
 
-/** Cálculo completo de la jornada al cerrar/editar. */
+/** Cálculo de los MINUTOS de la jornada al cerrar/editar (sin dinero). */
 export function computeWorkday(input: WorkdayInput): WorkdayResult {
   const { entryTime, exitTime, breakMinutes, snapshot: snap } = input;
 
@@ -127,14 +127,6 @@ export function computeWorkday(input: WorkdayInput): WorkdayResult {
   const baseMinutes = Math.min(worked, snap.baseDailyMinutes);
   const overtimeMinutes = Math.max(0, worked - snap.baseDailyMinutes);
 
-  // En sueldo fijo la jornada base NO se paga por hora (va en el sueldo); solo la extra.
-  const basePayment =
-    snap.payModel === 'FIXED_SALARY' ? 0 : roundCLP((baseMinutes / 60) * snap.hourlyRate);
-  const overtimePayment = roundCLP(
-    (overtimeMinutes / 60) * snap.hourlyRate * snap.overtimeMultiplier,
-  );
-  const dailyPayment = basePayment + overtimePayment;
-
   return {
     workedMinutes: worked,
     baseMinutes,
@@ -142,8 +134,29 @@ export function computeWorkday(input: WorkdayInput): WorkdayResult {
     delayMinutes: delay,
     effectiveEntryMinutes: efEntry,
     effectiveExitMinutes: efExit,
-    basePayment,
-    overtimePayment,
-    dailyPayment,
   };
+}
+
+/**
+ * Convierte los minutos de un día en dinero, según el valor hora, el
+ * multiplicador de extra y el modelo de pago.
+ *  - HOURLY: se paga la base + la extra.
+ *  - FIXED_SALARY: la base NO se paga por hora (va en el sueldo); solo la extra.
+ */
+export function priceDay(
+  baseMinutes: number,
+  overtimeMinutes: number,
+  hourlyRate: number,
+  overtimeMultiplier: number,
+  payModel: PayModel,
+): DayPrice {
+  const overtimePayment = roundCLP((overtimeMinutes / 60) * hourlyRate * overtimeMultiplier);
+  const basePayment =
+    payModel === 'FIXED_SALARY' ? 0 : roundCLP((baseMinutes / 60) * hourlyRate);
+  return { basePayment, overtimePayment, dailyPayment: basePayment + overtimePayment };
+}
+
+/** Valor en CLP del atraso (para el descuento del modelo sueldo fijo). */
+export function priceDelay(delayMinutes: number, hourlyRate: number): number {
+  return roundCLP((delayMinutes / 60) * hourlyRate);
 }

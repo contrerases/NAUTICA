@@ -327,6 +327,35 @@
             />
           </div>
 
+          <!-- Vigencia del valor hora (solo al editar; aplica si cambiaste el valor) -->
+          <div v-if="isEditing" class="rounded-xl border border-surface-border bg-surface-muted p-3 space-y-3">
+            <p class="text-xs font-semibold text-text-muted uppercase tracking-wide">Vigencia del valor hora</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <BaseInput
+                v-model="rateFrom"
+                type="date"
+                label="Vigente desde"
+                :disabled="formLoading"
+              />
+              <BaseInput
+                v-if="rateCorrectTramo"
+                v-model="rateTo"
+                type="date"
+                label="Hasta (fin del tramo)"
+                :disabled="formLoading"
+              />
+            </div>
+            <label class="flex items-center gap-2 text-sm text-text-base cursor-pointer">
+              <input type="checkbox" v-model="rateCorrectTramo" :disabled="formLoading" class="rounded border-surface-border text-primary focus:ring-primary/30" />
+              Corregir solo un tramo (indicar "hasta")
+            </label>
+            <p class="text-[11px] text-text-muted leading-snug">
+              Solo aplica si cambiaste el valor hora. <strong>Sin "hasta"</strong>: rige desde esa fecha en adelante.
+              <strong>Con "hasta"</strong>: corrige únicamente ese tramo y el resto del historial no cambia.
+              Si la fecha cae en un mes anterior, se pedirá confirmación (recalcula liquidaciones ya cerradas).
+            </p>
+          </div>
+
           <!-- Foto del Trabajador (Opcional) -->
           <div>
             <label class="block text-sm font-semibold text-text-base ml-1 mb-1">Foto del Trabajador (Opcional)</label>
@@ -830,12 +859,25 @@ const initialFormState = {
 };
 const formData = ref({ ...initialFormState });
 
+// Vigencia del cambio de valor hora (solo en edición).
+const rateFrom = ref(today());
+const rateCorrectTramo = ref(false);
+const rateTo = ref('');
+const originalRate = ref(0);
+const resetRateVigencia = () => {
+  rateFrom.value = today();
+  rateCorrectTramo.value = false;
+  rateTo.value = '';
+  originalRate.value = 0;
+};
+
 const resetForm = () => {
   formData.value = { ...initialFormState };
   docType.value = 'RUT';
   documentValue.value = '';
   formError.value = '';
   photoInputRef.value = null;
+  resetRateVigencia();
 };
 
 // ================= FOTOS =================
@@ -894,6 +936,7 @@ const openEditModal = (worker: Worker) => {
     start_date: worker.start_date || today(),
     photo: worker.photo || null
   };
+  originalRate.value = worker.hourly_rate;
   
   if (worker.rut) {
     docType.value = 'RUT';
@@ -957,6 +1000,37 @@ const submitForm = async () => {
     return;
   }
 
+  // Vigencia del valor hora (solo al editar y solo si cambió el valor o se corrige un tramo).
+  let rateFromVal: string | undefined;
+  let rateToVal: string | null | undefined;
+  if (isEditing.value) {
+    const rateChanged = hourlyRate !== originalRate.value;
+    const tramo = rateCorrectTramo.value;
+    if (tramo && !rateTo.value) {
+      formError.value = 'Indica la fecha "hasta" del tramo a corregir.';
+      return;
+    }
+    if (tramo && rateTo.value < rateFrom.value) {
+      formError.value = 'El "hasta" del tramo debe ser posterior o igual al "desde".';
+      return;
+    }
+    if (rateChanged || tramo) {
+      rateFromVal = rateFrom.value;
+      rateToVal = tramo ? rateTo.value : null;
+      const touchesPast =
+        monthOf(rateFrom.value) < currentMonth() || (tramo && monthOf(rateTo.value) < currentMonth());
+      if (touchesPast) {
+        const rango = tramo ? `desde ${rateFrom.value} hasta ${rateTo.value}` : `desde ${rateFrom.value}`;
+        const okc = await askConfirm({
+          title: 'Cambio con efecto retroactivo',
+          message: `El nuevo valor hora regirá ${rango}, que incluye meses ya cerrados. Esto recalcula esas liquidaciones. ¿Continuar?`,
+          confirmText: 'Sí, aplicar',
+        });
+        if (!okc) return;
+      }
+    }
+  }
+
   formLoading.value = true;
   try {
     let msg = '';
@@ -964,6 +1038,9 @@ const submitForm = async () => {
       const data: UpdateWorkerDto = {
         name: formData.value.name.trim(),
         hourly_rate: hourlyRate,
+        rate_effective_from: rateFromVal,
+        rate_effective_to: rateToVal,
+        rate_note: rateFromVal ? (rateToVal ? 'corrección de tramo' : 'cambio de valor hora') : undefined,
         pay_model: payModel,
         monthly_salary: monthlySalary,
         start_date: formData.value.start_date,

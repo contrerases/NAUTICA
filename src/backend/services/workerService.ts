@@ -67,7 +67,7 @@ export const workerService = {
         start_date: data.start_date,
       });
       // Tarifa versionada: vigente desde la fecha de ingreso.
-      workerRepository.insertRate(id, data.hourly_rate, data.start_date);
+      workerRepository.insertRate(id, data.hourly_rate, data.start_date, null, 'alta');
       // Modelo de pago + sueldo versionados: vigentes desde la fecha de ingreso.
       workerRepository.insertSalary(id, payModel, monthlySalary, data.start_date);
       return id;
@@ -84,7 +84,10 @@ export const workerService = {
     const current = workerRepository.findById(id);
     if (!current) throw new Error('Trabajador no encontrado.');
 
-    const fields: Partial<Worker> = { ...data };
+    // No escribimos hourly_rate directo: se maneja como versión con vigencia y el
+    // valor "actual" del trabajador se recalcula como el vigente hoy.
+    const { hourly_rate, rate_effective_from, rate_effective_to, rate_note, ...rest } = data;
+    const fields: Partial<Worker> = { ...rest };
     if (data.rut !== undefined) fields.rut = normalizeRut(data.rut);
     if (data.dni !== undefined) fields.dni = data.dni?.trim() || null;
 
@@ -97,13 +100,22 @@ export const workerService = {
 
     const tx = getDatabase().transaction(() => {
       workerRepository.update(id, fields, adminId);
-      // Cambio de tarifa → nueva versión vigente desde hoy (los turnos ya iniciados
-      // conservan su snapshot; los registros pasados usan su tarifa histórica).
-      if (data.hourly_rate !== undefined && data.hourly_rate !== current.hourly_rate) {
-        workerRepository.insertRate(id, data.hourly_rate, today());
+
+      // Valor hora: versión con vigencia.
+      //  - Con rate_effective_to → corrige SOLO ese tramo (el resto no cambia).
+      //  - Sin "to" → cambio abierto desde la fecha indicada (o hoy).
+      const wantsRateOp =
+        hourly_rate !== undefined &&
+        (rate_effective_to != null || hourly_rate !== current.hourly_rate);
+      if (wantsRateOp) {
+        const from = rate_effective_from ?? today();
+        workerRepository.setRateRange(id, hourly_rate!, from, rate_effective_to ?? null, adminId, rate_note ?? null);
       }
-      // Cambio de modelo o sueldo → nueva versión vigente desde hoy (meses cerrados
-      // conservan su versión anterior; los turnos ya marcados conservan su snapshot).
+      // El "valor hora actual" del trabajador = el vigente HOY (tras cualquier tramo/corrección).
+      const currentRate = workerRepository.getRateForDate(id, today()) ?? current.hourly_rate;
+      getDatabase().prepare('UPDATE workers SET hourly_rate = ? WHERE id = ?').run(currentRate, id);
+
+      // Modelo/sueldo → nueva versión vigente desde hoy (meses cerrados conservan su versión).
       const modelChanged = data.pay_model !== undefined && data.pay_model !== current.pay_model;
       const salaryChanged = data.monthly_salary !== undefined && newSalary !== current.monthly_salary;
       if (modelChanged || salaryChanged) {

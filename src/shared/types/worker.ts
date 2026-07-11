@@ -44,6 +44,12 @@ export interface UpdateWorkerDto {
   dni?: string | null;
   photo?: string | null;
   hourly_rate?: number;
+  /** Vigencia del nuevo valor hora. Sin "to" = cambio abierto desde "from" (o hoy). */
+  rate_effective_from?: string;
+  /** Con "to" = corrige SOLO el tramo [from, to]; el resto del historial no cambia. */
+  rate_effective_to?: string | null;
+  /** Motivo del cambio de tarifa (traza), p. ej. "corrección". */
+  rate_note?: string | null;
   pay_model?: PayModel;
   monthly_salary?: number;
   start_date?: string;

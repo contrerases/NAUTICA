@@ -1,18 +1,16 @@
 import { getDatabase } from '../database/connection';
 import type { AttendanceRecord } from '../../shared/types/attendance';
-import type { PayModel } from '../../shared/types/worker';
 
 /** Acceso a datos de asistencia. Solo SQL: el cálculo vive en WorkdayService. */
 
+/** Snapshot del HORARIO vigente al marcar (sin precio ni modelo). */
 export interface AttendanceSnapshot {
-  hourly_rate_snap: number;
   start_hour_snap: string;
   exit_hour_snap: string;
   tolerance_snap: number;
   exit_tolerance_snap: number;
   base_daily_minutes_snap: number;
   overtime_multiplier_snap: number;
-  pay_model_snap: PayModel;
 }
 
 export interface CloseFields {
@@ -21,9 +19,6 @@ export interface CloseFields {
   worked_minutes: number;
   base_minutes: number;
   overtime_minutes: number;
-  base_payment: number;
-  overtime_payment: number;
-  daily_payment: number;
 }
 
 const WITH_NAME = `
@@ -85,12 +80,12 @@ export const attendanceRepository = {
       .prepare(
         `INSERT INTO attendance_records (
            worker_id, date, entry_time, status, delay_minutes,
-           hourly_rate_snap, start_hour_snap, exit_hour_snap, tolerance_snap,
-           exit_tolerance_snap, base_daily_minutes_snap, overtime_multiplier_snap, pay_model_snap
+           start_hour_snap, exit_hour_snap, tolerance_snap,
+           exit_tolerance_snap, base_daily_minutes_snap, overtime_multiplier_snap
          ) VALUES (
            @worker_id, @date, @entry_time, 'OPEN', @delay_minutes,
-           @hourly_rate_snap, @start_hour_snap, @exit_hour_snap, @tolerance_snap,
-           @exit_tolerance_snap, @base_daily_minutes_snap, @overtime_multiplier_snap, @pay_model_snap
+           @start_hour_snap, @exit_hour_snap, @tolerance_snap,
+           @exit_tolerance_snap, @base_daily_minutes_snap, @overtime_multiplier_snap
          )`,
       )
       .run({
@@ -110,8 +105,7 @@ export const attendanceRepository = {
         `UPDATE attendance_records SET
            exit_time = @exit_time, break_minutes = @break_minutes,
            worked_minutes = @worked_minutes, base_minutes = @base_minutes,
-           overtime_minutes = @overtime_minutes, base_payment = @base_payment,
-           overtime_payment = @overtime_payment, daily_payment = @daily_payment,
+           overtime_minutes = @overtime_minutes,
            status = 'CLOSED',
            updated_at = datetime('now', 'localtime'), updated_by = @updatedBy
          WHERE id = @id`,
@@ -126,7 +120,6 @@ export const attendanceRepository = {
         `UPDATE attendance_records SET
            entry_time = @entry_time, exit_time = NULL, break_minutes = 0,
            worked_minutes = NULL, base_minutes = NULL, overtime_minutes = 0,
-           base_payment = 0, overtime_payment = 0, daily_payment = NULL,
            delay_minutes = @delay_minutes, status = 'OPEN',
            updated_at = datetime('now', 'localtime'), updated_by = @updatedBy
          WHERE id = @id`,

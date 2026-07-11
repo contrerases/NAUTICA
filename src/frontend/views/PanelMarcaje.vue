@@ -219,9 +219,14 @@
             <span class="text-lg font-black text-text-base tabular-nums">{{ daySummary.worked }}</span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-sm font-medium text-text-muted uppercase tracking-wide">Total del día</span>
+            <span class="text-sm font-medium text-text-muted uppercase tracking-wide">
+              {{ daySummary.salaried ? 'Pago extras del día' : 'Total del día' }}
+            </span>
             <span class="text-lg font-black text-primary tabular-nums">{{ daySummary.payment }}</span>
           </div>
+          <p v-if="daySummary.salaried" class="text-xs text-text-muted -mt-1">
+            Tu jornada normal va incluida en tu sueldo mensual.
+          </p>
           <div v-if="daySummary.overtimeMinutes > 0" class="flex items-center justify-between">
             <span class="text-sm font-medium text-text-muted uppercase tracking-wide">Horas extra</span>
             <span class="text-base font-bold text-text-base tabular-nums">{{ formatDuration(daySummary.overtimeMinutes) }}</span>
@@ -438,6 +443,7 @@ interface DaySummary {
   payment: string;  // formatCLP(daily_payment)
   overtimeMinutes: number;
   delayMinutes: number;
+  salaried: boolean; // true si el turno es de un trabajador con sueldo fijo
 }
 const daySummary = ref<DaySummary | null>(null);
 
@@ -489,6 +495,7 @@ const showSuccessFeedback = (msg: string, record?: AttendanceRecord) => {
           payment: formatCLP(record.daily_payment ?? 0),
           overtimeMinutes: record.overtime_minutes,
           delayMinutes: record.delay_minutes,
+          salaried: record.pay_model_snap === 'FIXED_SALARY',
         }
       : null;
   isSuccessModalOpen.value = true;

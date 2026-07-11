@@ -1,5 +1,5 @@
 import { getDatabase } from '../database/connection';
-import type { Worker, WorkerStatus } from '../../shared/types/worker';
+import type { Worker, WorkerStatus, PayModel } from '../../shared/types/worker';
 
 /** Acceso a datos de trabajadores y su historial de tarifa. Solo SQL. */
 export const workerRepository = {
@@ -31,12 +31,14 @@ export const workerRepository = {
     dni: string | null;
     photo: string | null;
     hourly_rate: number;
+    pay_model: PayModel;
+    monthly_salary: number;
     start_date: string;
   }): number {
     const info = getDatabase()
       .prepare(
-        `INSERT INTO workers (name, rut, dni, photo, hourly_rate, start_date)
-         VALUES (@name, @rut, @dni, @photo, @hourly_rate, @start_date)`,
+        `INSERT INTO workers (name, rut, dni, photo, hourly_rate, pay_model, monthly_salary, start_date)
+         VALUES (@name, @rut, @dni, @photo, @hourly_rate, @pay_model, @monthly_salary, @start_date)`,
       )
       .run(data);
     return info.lastInsertRowid as number;
@@ -44,7 +46,7 @@ export const workerRepository = {
 
   /** Actualiza solo los campos presentes. Registra el admin que modificó (traza). */
   update(id: number, fields: Partial<Worker>, adminId: number | null): void {
-    const allowed = ['name', 'rut', 'dni', 'photo', 'hourly_rate', 'start_date', 'status'] as const;
+    const allowed = ['name', 'rut', 'dni', 'photo', 'hourly_rate', 'pay_model', 'monthly_salary', 'start_date', 'status'] as const;
     const sets: string[] = [];
     const params: Record<string, unknown> = { id };
     for (const key of allowed) {
@@ -92,5 +94,30 @@ export const workerRepository = {
       )
       .get(workerId, date) as { hourly_rate: number } | undefined;
     return row?.hourly_rate;
+  },
+
+  // ── Historial de modelo de pago + sueldo ────────────────
+  insertSalary(workerId: number, payModel: PayModel, monthlySalary: number, effectiveFrom: string): void {
+    getDatabase()
+      .prepare(
+        `INSERT INTO worker_salary_history (worker_id, pay_model, monthly_salary, effective_from)
+         VALUES (?, ?, ?, ?)`,
+      )
+      .run(workerId, payModel, monthlySalary, effectiveFrom);
+  },
+
+  /** Modelo + sueldo vigentes en una fecha: la versión de mayor effective_from <= date. */
+  getSalaryForDate(
+    workerId: number,
+    date: string,
+  ): { pay_model: PayModel; monthly_salary: number } | undefined {
+    const row = getDatabase()
+      .prepare(
+        `SELECT pay_model, monthly_salary FROM worker_salary_history
+         WHERE worker_id = ? AND effective_from <= ?
+         ORDER BY effective_from DESC, id DESC LIMIT 1`,
+      )
+      .get(workerId, date) as { pay_model: PayModel; monthly_salary: number } | undefined;
+    return row;
   },
 };

@@ -9,6 +9,7 @@
 
 import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
+import { readFileSync, writeFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { initDatabase, closeDatabase } from './database/connection'
 import { authService } from './services/authService'
@@ -32,6 +33,59 @@ process.on('unhandledRejection', (reason) => {
  */
 let mainWindow: BrowserWindow | null = null
 
+// ── Zoom de la aplicación (persistente) ─────────────────────
+const ZOOM_MIN = 0.5
+const ZOOM_MAX = 2.5
+const ZOOM_STEP = 0.1
+
+function zoomStorePath(): string {
+  return join(app.getPath('userData'), 'ui-prefs.json')
+}
+
+function loadZoomFactor(): number {
+  try {
+    const raw = readFileSync(zoomStorePath(), 'utf-8')
+    const z = Number(JSON.parse(raw)?.zoomFactor)
+    if (Number.isFinite(z)) return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z))
+  } catch {
+    // sin preferencia guardada → zoom 1
+  }
+  return 1
+}
+
+function saveZoomFactor(z: number): void {
+  try {
+    writeFileSync(zoomStorePath(), JSON.stringify({ zoomFactor: z }))
+  } catch (e) {
+    console.error('[App] No se pudo guardar el zoom:', e)
+  }
+}
+
+const clampZoom = (z: number): number => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 10) / 10))
+
+/** Habilita zoom tipo página: Ctrl +/-/0 y Ctrl+rueda, con persistencia. */
+function enableZoom(win: BrowserWindow): void {
+  const wc = win.webContents
+
+  wc.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || !input.control) return
+    let factor = wc.getZoomFactor()
+    if (input.key === '+' || input.key === '=') factor = clampZoom(factor + ZOOM_STEP)
+    else if (input.key === '-' || input.key === '_') factor = clampZoom(factor - ZOOM_STEP)
+    else if (input.key === '0') factor = 1
+    else return
+    wc.setZoomFactor(factor)
+    saveZoomFactor(factor)
+    event.preventDefault()
+  })
+
+  wc.on('zoom-changed', (_event, direction) => {
+    const factor = clampZoom(wc.getZoomFactor() + (direction === 'in' ? ZOOM_STEP : -ZOOM_STEP))
+    wc.setZoomFactor(factor)
+    saveZoomFactor(factor)
+  })
+}
+
 /**
  * Crea la ventana principal de Electron
  */
@@ -53,8 +107,13 @@ function createWindow() {
     }
   })
 
+  // Zoom persistente (Ctrl +/-/0 y Ctrl+rueda)
+  enableZoom(mainWindow)
+
   // Mostrar ventana cuando esté lista
   mainWindow.on('ready-to-show', () => {
+    const zoom = loadZoomFactor()
+    if (zoom !== 1) mainWindow?.webContents.setZoomFactor(zoom)
     mainWindow?.show()
     console.log('[App] Ventana lista para mostrar')
   })

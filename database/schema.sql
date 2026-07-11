@@ -29,9 +29,16 @@ CREATE TABLE IF NOT EXISTS workers (
   photo       TEXT DEFAULT NULL,
   rut         TEXT DEFAULT NULL CHECK (rut IS NULL OR length(rut) > 0),
   dni         TEXT DEFAULT NULL CHECK (dni IS NULL OR length(dni) > 0),
-  hourly_rate INTEGER NOT NULL CHECK (hourly_rate > 0),   -- tarifa vigente (CLP entero)
+  hourly_rate INTEGER NOT NULL CHECK (hourly_rate > 0),   -- tarifa vigente (CLP entero). En sueldo fijo: valor de la hora extra y del descuento por atraso.
   start_date  TEXT NOT NULL,
   status      TEXT NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE')),
+  -- Modelo de pago (por trabajador):
+  --   'HOURLY'       = se paga por hora trabajada (comportamiento original).
+  --   'FIXED_SALARY' = sueldo fijo mensual; la jornada base NO se paga por hora
+  --                    (va en el sueldo). Solo las horas extra se pagan aparte, y
+  --                    los atrasos del mes se descuentan (min→hora × valor hora).
+  pay_model      TEXT NOT NULL DEFAULT 'HOURLY' CHECK (pay_model IN ('HOURLY', 'FIXED_SALARY')),
+  monthly_salary INTEGER NOT NULL DEFAULT 0 CHECK (monthly_salary >= 0),   -- CLP entero (sueldo vigente)
   created_at  TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   updated_by  INTEGER DEFAULT NULL REFERENCES users(id) ON DELETE SET NULL,
@@ -50,6 +57,20 @@ CREATE TABLE IF NOT EXISTS worker_rate_history (
   created_at     TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 CREATE INDEX IF NOT EXISTS idx_rate_worker_date ON worker_rate_history (worker_id, effective_from);
+
+-- ── Historial de modelo de pago + sueldo (por fecha de vigencia) ─
+-- Análogo a worker_rate_history: la versión vigente para la fecha D es la de
+-- mayor effective_from <= D. Cambiar el sueldo/modelo inserta una versión nueva
+-- (desde hoy), así los meses ya cerrados conservan su valor y no se reescriben.
+CREATE TABLE IF NOT EXISTS worker_salary_history (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  worker_id      INTEGER NOT NULL REFERENCES workers(id) ON DELETE CASCADE,
+  pay_model      TEXT NOT NULL DEFAULT 'HOURLY' CHECK (pay_model IN ('HOURLY', 'FIXED_SALARY')),
+  monthly_salary INTEGER NOT NULL DEFAULT 0 CHECK (monthly_salary >= 0),
+  effective_from TEXT NOT NULL,   -- "YYYY-MM-DD"
+  created_at     TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_salary_worker_date ON worker_salary_history (worker_id, effective_from);
 
 -- ── Configuración versionada ──────────────────────────────
 -- La "config vigente para la fecha D" = la versión con mayor effective_from <= D.
@@ -104,6 +125,8 @@ CREATE TABLE IF NOT EXISTS attendance_records (
   exit_tolerance_snap      INTEGER NOT NULL CHECK (exit_tolerance_snap >= 0),
   base_daily_minutes_snap  INTEGER NOT NULL CHECK (base_daily_minutes_snap > 0),
   overtime_multiplier_snap REAL NOT NULL CHECK (overtime_multiplier_snap > 0),
+  -- Modelo de pago congelado del turno (define si la jornada base se paga por hora)
+  pay_model_snap           TEXT NOT NULL DEFAULT 'HOURLY' CHECK (pay_model_snap IN ('HOURLY', 'FIXED_SALARY')),
 
   created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
   updated_at TEXT DEFAULT NULL,

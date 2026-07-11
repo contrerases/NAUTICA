@@ -9,9 +9,15 @@
  *  - No hay turnos que crucen medianoche: se rechaza salida <= entrada.
  *  - Entrada temprana o dentro de la tolerancia cuenta como la hora de inicio.
  *  - Salida dentro de la tolerancia de salida cuenta como la hora oficial.
- *  - Atraso = UNA sola sanción: el atrasado simplemente trabaja (y cobra) menos.
- *    NO se aplica ningún descuento adicional. delay_minutes es informativo.
- *  - Hora extra = lo que excede la jornada base, pagada a tarifa × multiplicador.
+ *  - Atraso (modelo HOURLY) = UNA sola sanción: el atrasado trabaja (y cobra)
+ *    menos. NO se aplica descuento adicional a nivel de día. delay_minutes es
+ *    informativo aquí; en el modelo FIXED_SALARY el atraso se descuenta a fin de
+ *    mes en la nómina (no en este motor).
+ *  - Modelo FIXED_SALARY: la jornada base NO se paga por hora (va en el sueldo);
+ *    a nivel de día solo se paga la hora extra. El sueldo fijo se inyecta una vez
+ *    por mes en la nómina, no aquí.
+ *  - Hora extra = lo que excede la jornada base, pagada a tarifa × multiplicador
+ *    (en AMBOS modelos).
  *  - Todo el dinero es entero CLP (se redondea en un único punto).
  */
 
@@ -21,6 +27,8 @@ import { roundCLP } from '../utils/money';
 export interface WorkdaySnapshot {
   /** Valor hora en CLP (entero) vigente para la fecha del turno. */
   hourlyRate: number;
+  /** Modelo de pago congelado del turno. En FIXED_SALARY la jornada base no se paga por hora. */
+  payModel: 'HOURLY' | 'FIXED_SALARY';
   /** Hora oficial de inicio "HH:MM". */
   startHour: string;
   /** Hora oficial de salida "HH:MM". */
@@ -119,7 +127,9 @@ export function computeWorkday(input: WorkdayInput): WorkdayResult {
   const baseMinutes = Math.min(worked, snap.baseDailyMinutes);
   const overtimeMinutes = Math.max(0, worked - snap.baseDailyMinutes);
 
-  const basePayment = roundCLP((baseMinutes / 60) * snap.hourlyRate);
+  // En sueldo fijo la jornada base NO se paga por hora (va en el sueldo); solo la extra.
+  const basePayment =
+    snap.payModel === 'FIXED_SALARY' ? 0 : roundCLP((baseMinutes / 60) * snap.hourlyRate);
   const overtimePayment = roundCLP(
     (overtimeMinutes / 60) * snap.hourlyRate * snap.overtimeMultiplier,
   );

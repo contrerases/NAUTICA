@@ -114,11 +114,15 @@
 
         </template>
 
-        <!-- Col Valor Hora -->
+        <!-- Col Valor Hora / Sueldo -->
         <template #cell-hourly_rate="{ row }">
-          <span class="font-mono font-medium text-emerald-500">{{ formatCLP(row.hourly_rate) }}</span>
-
-
+          <div class="flex flex-col">
+            <template v-if="row.pay_model === 'FIXED_SALARY'">
+              <span class="font-mono font-bold text-primary">{{ formatCLP(row.monthly_salary) }}<span class="text-[10px] font-sans text-text-muted"> /mes</span></span>
+              <span class="text-[10px] text-text-muted mt-0.5">Sueldo fijo · hora {{ formatCLP(row.hourly_rate) }}</span>
+            </template>
+            <span v-else class="font-mono font-medium text-emerald-500">{{ formatCLP(row.hourly_rate) }}</span>
+          </div>
         </template>
 
         <!-- Col Valor Hora Extra -->
@@ -272,12 +276,43 @@
             />
           </div>
 
+          <!-- Modelo de pago -->
+          <div class="space-y-1">
+            <label class="block text-sm font-semibold text-text-base ml-1">Modelo de pago</label>
+            <SegmentedToggle
+              v-model="formData.pay_model"
+              :disabled="formLoading"
+              :options="[
+                { value: 'HOURLY', label: 'Por hora' },
+                { value: 'FIXED_SALARY', label: 'Sueldo fijo' },
+              ]"
+            />
+            <p class="text-xs text-text-muted ml-1 mt-1">
+              <template v-if="formData.pay_model === 'FIXED_SALARY'">
+                Sueldo fijo mensual: la jornada normal va incluida en el sueldo. Las horas extra se pagan aparte y los atrasos del mes se descuentan.
+              </template>
+              <template v-else>
+                Se paga por hora trabajada (más las horas extra).
+              </template>
+            </p>
+          </div>
+
+          <!-- Sueldo mensual (solo modelo sueldo fijo) -->
+          <MoneyInput
+            v-if="formData.pay_model === 'FIXED_SALARY'"
+            v-model="formData.monthly_salary"
+            id="worker-salary"
+            label="Sueldo mensual ($)"
+            placeholder="Ej: 500.000"
+            :disabled="formLoading"
+          />
+
           <!-- Valor Hora y Fecha Ingreso -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <MoneyInput
               v-model="formData.hourly_rate"
               id="worker-rate"
-              label="Valor Hora ($)"
+              :label="formData.pay_model === 'FIXED_SALARY' ? 'Valor hora — extras y atrasos ($)' : 'Valor Hora ($)'"
               placeholder="Ej: 5.000"
               :disabled="formLoading"
             />
@@ -367,8 +402,19 @@
               <p class="font-mono text-sm mt-1 text-text-base">{{ selectedWorkerDetails.rut || selectedWorkerDetails.dni || 'No registrado' }}</p>
             </div>
             <div>
-              <p class="text-xs text-text-muted font-semibold uppercase tracking-wider">Valor Hora</p>
+              <p class="text-xs text-text-muted font-semibold uppercase tracking-wider">
+                {{ selectedWorkerDetails.pay_model === 'FIXED_SALARY' ? 'Valor Hora (extras/atrasos)' : 'Valor Hora' }}
+              </p>
               <p class="font-mono text-emerald-500 font-medium mt-1 text-sm">{{ formatCLP(selectedWorkerDetails.hourly_rate) }} / hr</p>
+            </div>
+            <div class="col-span-2">
+              <p class="text-xs text-text-muted font-semibold uppercase tracking-wider">Modelo de pago</p>
+              <p class="mt-1 text-sm text-text-base">
+                <template v-if="selectedWorkerDetails.pay_model === 'FIXED_SALARY'">
+                  Sueldo fijo — <span class="font-mono text-primary font-semibold">{{ formatCLP(selectedWorkerDetails.monthly_salary) }}</span> / mes
+                </template>
+                <template v-else>Por hora</template>
+              </p>
             </div>
             <div class="col-span-2">
               <p class="text-xs text-text-muted font-semibold uppercase tracking-wider">Fecha Ingreso</p>
@@ -510,7 +556,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import type { Worker, WorkerAdvance, CreateWorkerDto, UpdateWorkerDto } from '@shared/types';
+import type { Worker, WorkerAdvance, CreateWorkerDto, UpdateWorkerDto, PayModel } from '@shared/types';
 import { formatCLP } from '@shared/utils/money';
 import { isValidRut } from '@shared/utils/rut';
 import { today, currentMonth, monthOf } from '@shared/utils/date';
@@ -777,6 +823,8 @@ const initialFormState = {
   id: 0,
   name: '',
   hourly_rate: 0,
+  pay_model: 'HOURLY' as PayModel,
+  monthly_salary: 0,
   start_date: today(),
   photo: null as string | null
 };
@@ -841,6 +889,8 @@ const openEditModal = (worker: Worker) => {
     id: worker.id,
     name: worker.name,
     hourly_rate: worker.hourly_rate,
+    pay_model: worker.pay_model ?? 'HOURLY',
+    monthly_salary: worker.monthly_salary ?? 0,
     start_date: worker.start_date || today(),
     photo: worker.photo || null
   };
@@ -899,6 +949,13 @@ const submitForm = async () => {
 
   const adminId = adminStore.admin?.id ?? undefined;
   const hourlyRate = Number(formData.value.hourly_rate);
+  const payModel = formData.value.pay_model;
+  const monthlySalary = payModel === 'FIXED_SALARY' ? Number(formData.value.monthly_salary) : 0;
+
+  if (payModel === 'FIXED_SALARY' && monthlySalary <= 0) {
+    formError.value = 'Indica el sueldo mensual (mayor a cero) para el modelo de sueldo fijo.';
+    return;
+  }
 
   formLoading.value = true;
   try {
@@ -907,6 +964,8 @@ const submitForm = async () => {
       const data: UpdateWorkerDto = {
         name: formData.value.name.trim(),
         hourly_rate: hourlyRate,
+        pay_model: payModel,
+        monthly_salary: monthlySalary,
         start_date: formData.value.start_date,
         rut: cleanRutValue,
         dni: docType.value === 'DNI' ? documentValue.value.trim() : null,
@@ -918,6 +977,8 @@ const submitForm = async () => {
       const data: CreateWorkerDto = {
         name: formData.value.name.trim(),
         hourly_rate: hourlyRate,
+        pay_model: payModel,
+        monthly_salary: monthlySalary,
         start_date: formData.value.start_date,
         rut: cleanRutValue,
         dni: docType.value === 'DNI' ? documentValue.value.trim() : null,

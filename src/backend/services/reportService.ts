@@ -11,10 +11,14 @@ export const reportService = {
 
     ws.columns = [
       { header: 'Trabajador', key: 'name', width: 28 },
+      { header: 'Modelo', key: 'model', width: 12 },
       { header: 'Días', key: 'days', width: 8 },
       { header: 'Horas trabajadas', key: 'hours', width: 18 },
       { header: 'Horas extra', key: 'ot', width: 14 },
-      { header: 'Sueldo base', key: 'base', width: 16 },
+      { header: 'Atraso', key: 'delay', width: 12 },
+      { header: 'Pago base (horas)', key: 'base', width: 18 },
+      { header: 'Sueldo fijo', key: 'salary', width: 16 },
+      { header: 'Descuento atraso', key: 'delayded', width: 18 },
       { header: 'Pago extra', key: 'otpay', width: 14 },
       { header: 'Bruto', key: 'gross', width: 14 },
       { header: 'Adelantos', key: 'advances', width: 14 },
@@ -24,18 +28,23 @@ export const reportService = {
 
     const money = '#,##0';
     for (const w of summary.workers) {
+      const salaried = w.pay_model === 'FIXED_SALARY';
       const row = ws.addRow({
         name: w.worker_name + (w.status === 'INACTIVE' ? ' (inactivo)' : ''),
+        model: salaried ? 'Sueldo fijo' : 'Por hora',
         days: w.days_worked,
         hours: formatDuration(w.total_minutes),
         ot: formatDuration(w.overtime_minutes),
-        base: w.base_payment,
+        delay: formatDuration(w.delay_minutes),
+        base: salaried ? null : w.base_payment,
+        salary: salaried ? w.fixed_salary : null,
+        delayded: salaried ? -w.delay_deduction : null,
         otpay: w.overtime_payment,
         gross: w.gross_payment,
         advances: w.advances_amount,
         net: w.net_payment,
       });
-      (['base', 'otpay', 'gross', 'advances', 'net'] as const).forEach((k) => {
+      (['base', 'salary', 'delayded', 'otpay', 'gross', 'advances', 'net'] as const).forEach((k) => {
         row.getCell(k).numFmt = money;
       });
       if (w.has_debt) {

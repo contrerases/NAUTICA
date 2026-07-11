@@ -1,5 +1,7 @@
 /** Tipos de registros de asistencia (jornada). Dinero en enteros CLP. */
 
+import type { PayModel } from './worker';
+
 export type AttendanceStatus = 'OPEN' | 'CLOSED';
 
 export interface AttendanceRecord {
@@ -31,6 +33,7 @@ export interface AttendanceRecord {
   exit_tolerance_snap: number;
   base_daily_minutes_snap: number;
   overtime_multiplier_snap: number;
+  pay_model_snap: PayModel; // modelo de pago congelado del turno
 
   created_at: string;
   updated_at: string | null;

@@ -1,5 +1,6 @@
 import { getDatabase } from '../database/connection';
 import type { AttendanceRecord } from '../../shared/types/attendance';
+import type { PayModel } from '../../shared/types/worker';
 
 /** Acceso a datos de asistencia. Solo SQL: el cálculo vive en WorkdayService. */
 
@@ -11,6 +12,7 @@ export interface AttendanceSnapshot {
   exit_tolerance_snap: number;
   base_daily_minutes_snap: number;
   overtime_multiplier_snap: number;
+  pay_model_snap: PayModel;
 }
 
 export interface CloseFields {
@@ -84,11 +86,11 @@ export const attendanceRepository = {
         `INSERT INTO attendance_records (
            worker_id, date, entry_time, status, delay_minutes,
            hourly_rate_snap, start_hour_snap, exit_hour_snap, tolerance_snap,
-           exit_tolerance_snap, base_daily_minutes_snap, overtime_multiplier_snap
+           exit_tolerance_snap, base_daily_minutes_snap, overtime_multiplier_snap, pay_model_snap
          ) VALUES (
            @worker_id, @date, @entry_time, 'OPEN', @delay_minutes,
            @hourly_rate_snap, @start_hour_snap, @exit_hour_snap, @tolerance_snap,
-           @exit_tolerance_snap, @base_daily_minutes_snap, @overtime_multiplier_snap
+           @exit_tolerance_snap, @base_daily_minutes_snap, @overtime_multiplier_snap, @pay_model_snap
          )`,
       )
       .run({

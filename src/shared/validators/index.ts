@@ -32,12 +32,16 @@ const rutField = z
   .trim()
   .refine((v) => isValidRut(v), 'RUT inválido (revisa el dígito verificador).');
 
+const payModelField = z.enum(['HOURLY', 'FIXED_SALARY']);
+
 const workerBase = {
   name: z.string().trim().min(1, 'El nombre es obligatorio.'),
   rut: rutField.nullish(),
   dni: z.string().trim().min(1).nullish(),
   photo: z.string().nullish(),
   hourly_rate: z.number().int().positive('El valor hora debe ser mayor a cero.'),
+  pay_model: payModelField.default('HOURLY'),
+  monthly_salary: z.number().int().nonnegative('El sueldo no puede ser negativo.').default(0),
   start_date: ISO_DATE,
 };
 
@@ -46,17 +50,28 @@ export const createWorkerSchema = z
   .refine((w) => !!w.rut || !!w.dni, {
     message: 'Debe indicar al menos un documento (RUT o DNI).',
     path: ['rut'],
+  })
+  .refine((w) => w.pay_model !== 'FIXED_SALARY' || w.monthly_salary > 0, {
+    message: 'Indica el sueldo mensual (mayor a cero) para el modelo de sueldo fijo.',
+    path: ['monthly_salary'],
   });
 
-export const updateWorkerSchema = z.object({
-  name: workerBase.name.optional(),
-  rut: rutField.nullish(),
-  dni: z.string().trim().min(1).nullish(),
-  photo: z.string().nullish(),
-  hourly_rate: z.number().int().positive().optional(),
-  start_date: ISO_DATE.optional(),
-  status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
-});
+export const updateWorkerSchema = z
+  .object({
+    name: workerBase.name.optional(),
+    rut: rutField.nullish(),
+    dni: z.string().trim().min(1).nullish(),
+    photo: z.string().nullish(),
+    hourly_rate: z.number().int().positive().optional(),
+    pay_model: payModelField.optional(),
+    monthly_salary: z.number().int().nonnegative().optional(),
+    start_date: ISO_DATE.optional(),
+    status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
+  })
+  .refine((w) => w.pay_model !== 'FIXED_SALARY' || (w.monthly_salary !== undefined && w.monthly_salary > 0), {
+    message: 'Indica el sueldo mensual (mayor a cero) para el modelo de sueldo fijo.',
+    path: ['monthly_salary'],
+  });
 
 export const workerIdentitySchema = z.object({
   documentType: z.enum(['RUT', 'DNI']),

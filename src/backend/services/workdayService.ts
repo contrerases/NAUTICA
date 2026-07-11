@@ -27,6 +27,8 @@ function buildSnapshot(workerId: number, date: string): AttendanceSnapshot {
   const worker = workerRepository.findById(workerId);
   if (!worker) throw new Error('Trabajador no encontrado.');
   const rate = workerRepository.getRateForDate(workerId, date) ?? worker.hourly_rate;
+  const sal = workerRepository.getSalaryForDate(workerId, date);
+  const payModel = sal?.pay_model ?? worker.pay_model ?? 'HOURLY';
   return {
     hourly_rate_snap: rate,
     start_hour_snap: cfg.startHour,
@@ -35,6 +37,7 @@ function buildSnapshot(workerId: number, date: string): AttendanceSnapshot {
     exit_tolerance_snap: cfg.exitToleranceMinutes,
     base_daily_minutes_snap: cfg.baseDailyMinutes,
     overtime_multiplier_snap: cfg.overtimeMultiplier,
+    pay_model_snap: payModel,
   };
 }
 
@@ -42,6 +45,7 @@ function buildSnapshot(workerId: number, date: string): AttendanceSnapshot {
 function snapOf(r: AttendanceRecord): WorkdaySnapshot {
   return {
     hourlyRate: r.hourly_rate_snap,
+    payModel: r.pay_model_snap,
     startHour: r.start_hour_snap,
     exitHour: r.exit_hour_snap,
     toleranceMinutes: r.tolerance_snap,
@@ -109,6 +113,7 @@ export const workdayService = {
     const snap = buildSnapshot(dto.worker_id, date);
     const delay = computeDelayFromTime(entry, {
       hourlyRate: snap.hourly_rate_snap,
+      payModel: snap.pay_model_snap,
       startHour: snap.start_hour_snap,
       exitHour: snap.exit_hour_snap,
       toleranceMinutes: snap.tolerance_snap,
@@ -178,6 +183,7 @@ export const workdayService = {
     const snap = buildSnapshot(dto.worker_id, dto.date);
     const wsnap: WorkdaySnapshot = {
       hourlyRate: snap.hourly_rate_snap,
+      payModel: snap.pay_model_snap,
       startHour: snap.start_hour_snap,
       exitHour: snap.exit_hour_snap,
       toleranceMinutes: snap.tolerance_snap,

@@ -81,8 +81,12 @@
         class="h-full"
       >
         <template #cell-worker_name="{ row }">
-          <div class="font-bold text-text-base">
+          <div class="font-bold text-text-base flex items-center gap-2">
             {{ row.worker_name }}
+            <span
+              v-if="row.pay_model === 'FIXED_SALARY'"
+              class="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20"
+            >Sueldo fijo</span>
           </div>
         </template>
         <template #cell-days="{ row }">
@@ -98,7 +102,13 @@
           <span v-else class="text-text-muted/50">-</span>
         </template>
         <template #cell-base_pay="{ row }">
-          {{ formatCLP(row.base_payment) }}
+          <template v-if="row.pay_model === 'FIXED_SALARY'">
+            <div class="flex flex-col items-end">
+              <span class="text-primary font-semibold">{{ formatCLP(row.fixed_salary) }}</span>
+              <span v-if="row.delay_deduction > 0" class="text-[10px] text-danger">−{{ formatCLP(row.delay_deduction) }} atraso</span>
+            </div>
+          </template>
+          <span v-else>{{ formatCLP(row.base_payment) }}</span>
         </template>
         <template #cell-overtime_pay="{ row }">
           <span v-if="row.overtime_payment > 0" class="text-amber-500 font-bold">+{{ formatCLP(row.overtime_payment) }}</span>
@@ -126,14 +136,26 @@
       @close="selectedWorker = null"
     >
       <div v-if="selectedWorker">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 text-sm">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 text-sm">
           <StatCard label="Días Trabajados" :value="selectedWorker.days_worked" color="neutral" />
           <StatCard label="Horas Totales" :value="formatDuration(selectedWorker.total_minutes)" color="neutral" />
-          <StatCard label="Sueldo Base" :value="formatCLP(selectedWorker.base_payment)" color="primary" />
-          <StatCard label="Pago Extras" :value="formatCLP(selectedWorker.overtime_payment)" color="warning" />
-          <StatCard label="Adelantos (Descuento)" :value="`-${formatCLP(selectedWorker.advances_amount)}`" color="danger" />
+          <template v-if="selectedWorker.pay_model === 'FIXED_SALARY'">
+            <StatCard label="Sueldo Fijo" :value="formatCLP(selectedWorker.fixed_salary)" color="primary" />
+            <StatCard
+              :label="`Descuento Atraso (${formatDuration(selectedWorker.delay_minutes)})`"
+              :value="`-${formatCLP(selectedWorker.delay_deduction)}`"
+              color="danger"
+            />
+            <StatCard label="Pago Extras" :value="formatCLP(selectedWorker.overtime_payment)" color="warning" />
+            <StatCard label="Adelantos (Descuento)" :value="`-${formatCLP(selectedWorker.advances_amount)}`" color="danger" />
+          </template>
+          <template v-else>
+            <StatCard label="Sueldo Base" :value="formatCLP(selectedWorker.base_payment)" color="primary" />
+            <StatCard label="Pago Extras" :value="formatCLP(selectedWorker.overtime_payment)" color="warning" />
+            <StatCard label="Adelantos (Descuento)" :value="`-${formatCLP(selectedWorker.advances_amount)}`" color="danger" />
+          </template>
           <BaseCard
-            class="text-center md:col-span-3 text-body"
+            class="text-center md:col-span-4 text-body"
             :class="selectedWorker.has_debt ? 'bg-danger border-danger' : 'bg-primary border-primary'"
             padding="sm"
           >
@@ -167,7 +189,10 @@
               <td class="px-4 py-2">{{ rec.exit_time || '?' }}</td>
               <td class="px-4 py-2 text-center">{{ rec.worked_minutes !== null ? formatDuration(rec.worked_minutes) : '-' }}</td>
               <td class="px-4 py-2 text-center text-amber-500">{{ rec.overtime_minutes > 0 ? formatDuration(rec.overtime_minutes) : '-' }}</td>
-              <td class="px-4 py-2 text-right font-bold text-primary">{{ formatCLP(rec.daily_payment || 0) }}</td>
+              <td class="px-4 py-2 text-right font-bold text-primary">
+                {{ formatCLP(rec.daily_payment || 0) }}
+                <span v-if="rec.pay_model_snap === 'FIXED_SALARY'" class="block text-[10px] font-normal text-text-muted">solo extras (base en sueldo)</span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -390,7 +415,7 @@ const tableColumns = [
   { key: 'days', label: 'Días Asistidos', align: 'center' as const },
   { key: 'total_hours', label: 'Horas Base', align: 'center' as const },
   { key: 'overtime', label: 'Horas Extra', align: 'center' as const },
-  { key: 'base_pay', label: 'Sueldo Base', align: 'right' as const },
+  { key: 'base_pay', label: 'Base / Sueldo', align: 'right' as const },
   { key: 'overtime_pay', label: 'Pago Extras', align: 'right' as const },
   { key: 'advances_amount', label: 'Adelantos', align: 'right' as const },
   { key: 'total_pay', label: 'Líquido ($)', align: 'right' as const },

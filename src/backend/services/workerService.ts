@@ -53,6 +53,8 @@ export const workerService = {
   create(data: CreateWorkerDto): Worker {
     const rut = normalizeRut(data.rut);
     const dni = data.dni?.trim() || null;
+    const payModel = data.pay_model ?? 'HOURLY';
+    const monthlySalary = payModel === 'FIXED_SALARY' ? (data.monthly_salary ?? 0) : 0;
     const tx = getDatabase().transaction(() => {
       const id = workerRepository.insert({
         name: data.name.trim(),
@@ -60,10 +62,14 @@ export const workerService = {
         dni,
         photo: data.photo ?? null,
         hourly_rate: data.hourly_rate,
+        pay_model: payModel,
+        monthly_salary: monthlySalary,
         start_date: data.start_date,
       });
       // Tarifa versionada: vigente desde la fecha de ingreso.
       workerRepository.insertRate(id, data.hourly_rate, data.start_date);
+      // Modelo de pago + sueldo versionados: vigentes desde la fecha de ingreso.
+      workerRepository.insertSalary(id, payModel, monthlySalary, data.start_date);
       return id;
     });
     try {
@@ -82,12 +88,26 @@ export const workerService = {
     if (data.rut !== undefined) fields.rut = normalizeRut(data.rut);
     if (data.dni !== undefined) fields.dni = data.dni?.trim() || null;
 
+    // Si cambia el modelo a sueldo fijo, normalizamos el sueldo (por hora → 0).
+    const newModel = data.pay_model ?? current.pay_model;
+    const newSalary =
+      newModel === 'FIXED_SALARY' ? (data.monthly_salary ?? current.monthly_salary) : 0;
+    if (data.pay_model !== undefined) fields.pay_model = newModel;
+    if (data.pay_model !== undefined || data.monthly_salary !== undefined) fields.monthly_salary = newSalary;
+
     const tx = getDatabase().transaction(() => {
       workerRepository.update(id, fields, adminId);
       // Cambio de tarifa → nueva versión vigente desde hoy (los turnos ya iniciados
       // conservan su snapshot; los registros pasados usan su tarifa histórica).
       if (data.hourly_rate !== undefined && data.hourly_rate !== current.hourly_rate) {
         workerRepository.insertRate(id, data.hourly_rate, today());
+      }
+      // Cambio de modelo o sueldo → nueva versión vigente desde hoy (meses cerrados
+      // conservan su versión anterior; los turnos ya marcados conservan su snapshot).
+      const modelChanged = data.pay_model !== undefined && data.pay_model !== current.pay_model;
+      const salaryChanged = data.monthly_salary !== undefined && newSalary !== current.monthly_salary;
+      if (modelChanged || salaryChanged) {
+        workerRepository.insertSalary(id, newModel, newSalary, today());
       }
     });
     try {
